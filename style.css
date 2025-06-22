@@ -36,10 +36,21 @@ body {
     min-height: 100vh;
 }
 
+h3 {
+    display: flex;
+    padding: 10px;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.4rem;
+    font-family: var(--font-mono);
+    color: var(--red);
+    font-weight: bold;
+}
+
 /* Container principal que engloba cada "tela" da aplicação (tabela e mapa). */
 .view-container {
-    width: 100%;
-    max-width: 1400px;
+    width: 95%;
+    max-width: 1200px;
     background-color: var(--white);
     padding: 2.5rem;
     border-radius: var(--border-radius);
@@ -281,8 +292,8 @@ tbody tr:hover {
 
 /* Células individuais do mapa. */
 .kmap-cell {
-    width: 120px;
-    height: 120px;
+    width: 110px;
+    height: 110px;
     display: flex;
     justify-content: center;
     align-items: center;
