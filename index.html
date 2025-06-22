@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Tabela Verdade e Mapa de Karnaugh</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+    <main id="main-view" class="view-container active">
+        <header>
+            <h1>Mapa de Karnaugh Interativo</h1>
+            <p>Ajuste as variáveis e preencha a tabela verdade para simplificar expressões booleanas.</p>
+        </header>
+
+        <div class="input-section">
+            <label for="numVariaveis">Número de Variáveis:</label>
+            <div class="stepper">
+                <button id="btn-decrement" aria-label="Diminuir variáveis">-</button>
+                <input type="number" id="numVariaveis" min="2" max="6" value="3" readonly>
+                <button id="btn-increment" aria-label="Aumentar variáveis">+</button>
+            </div>
+
+            <button id="btn-gerar-mapa" class="btn-primary">Gerar Mapa de Karnaugh</button>
+        </div>
+
+        <div id="tabela-container">
+        </div>
+    </main>
+
+    <div id="map-view" class="view-container">
+        <header class="map-header">
+            <h1>Mapa de Karnaugh e Expressão</h1>
+            <button id="btn-voltar" class="btn-secondary">← Voltar para a Tabela</button>
+        </header>
+        
+        <div class="results-content">
+            <div class="kmap-and-expression">
+                <div id="kmap-container">
+                </div>
+
+                <div id="expression-container">
+                    <h2>Expressão Simplificada</h2>
+                    <p id="simplified-expression">S = ?</p>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="btn-copiar-expressao" class="btn-secondary">Copiar Expressão</button>
+                <button id="btn-salvar-jpg" class="btn-secondary">Salvar como JPG</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+/* Define um esquema de cores e variáveis globais para consistência no design. */
+:root {
+    /* Paleta de cores principais */
+    --blue-900:rgb(0, 60, 189);
+    --blue-600: #2563eb;
+    --blue-500: #3b82f6;
+    --blue-100: #dbeafe;
+    --slate-800: #1e293b;
+    --slate-600: #475569;
+    --slate-300: #cbd5e1;
+    --slate-200: #e2e8f0;
+    --slate-100: #f1f5f9;
+    --white: #ffffff;
+    --red: #dc2626;
+    --orange: #f97316;
+    
+    /* Variáveis para sombras, fontes e bordas */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --font-sans: 'Inter', sans-serif;
+    --font-mono: 'Roboto Mono', monospace;
+    --border-radius: 0.75rem; /* 12px */
+}
+
+/* Estilo base para a página, aplicando a fonte e o fundo padrão. */
+body {
+    font-family: var(--font-sans);
+    background-color: var(--slate-100);
+    color: var(--slate-800);
+    margin: 0;
+    padding: 2rem;
+    display: flex; /* Centraliza o conteúdo principal na página. */
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+/* Container principal que engloba cada "tela" da aplicação (tabela e mapa). */
+.view-container {
+    width: 100%;
+    max-width: 1400px;
+    background-color: var(--white);
+    padding: 2.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+    transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+}
+
+/*
+ * Controla a visibilidade das telas. A tela que não estiver com a classe '.active'
+ * fica invisível, fora da tela e não interativa. Isso permite a transição suave
+ * entre a tabela verdade e o mapa.
+ */
+.view-container:not(.active) {
+    opacity: 0;
+    transform: scale(0.98);
+    visibility: hidden;
+    position: absolute; /* Remove o elemento do fluxo normal do layout. */
+    z-index: -1;
+}
+
+/* Estilos para o cabeçalho principal da aplicação. */
+header {
+    margin-bottom: 2rem;
+}
+
+header h1 {
+    color: var(--slate-800);
+    font-weight: 700;
+    font-size: 2.25rem;
+    margin: 0;
+}
+
+header p {
+    font-weight: 400;
+    font-size: 1.125rem;
+    color: var(--slate-600);
+    max-width: 600px;
+    margin: 0 auto 2.5rem auto; /* Centraliza o parágrafo. */
+}
+
+/* Seção de entrada para selecionar o número de variáveis. */
+.input-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+}
+
+.input-section label {
+    font-size: 1.125rem;
+    font-weight: 500;
+}
+
+/* Componente "stepper" para aumentar/diminuir o número de variáveis. */
+.stepper {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--slate-300);
+    border-radius: 0.5rem;
+    overflow: hidden; /* Garante que os cantos arredondados sejam aplicados. */
+}
+
+.stepper input[type="number"] {
+    width: 60px;
+    height: 45px;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    border: none;
+    color: var(--blue-600);
+    background-color: transparent;
+    -moz-appearance: textfield; /* Remove os botões de spin padrão no Firefox. */
+    appearance: textfield; /* Evita um alerta do VS Code */
+}
+
+.stepper input::-webkit-inner-spin-button {
+    -webkit-appearance: none; /* Remove os botões de spin padrão no Chrome/Safari. */
+    margin: 0;
+}
+
+.stepper button {
+    width: 45px;
+    height: 45px;
+    border: none;
+    background-color: transparent;
+    font-size: 1.75rem;
+    font-weight: 400;
+    color: var(--blue-500);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.stepper button:hover {
+    background-color: var(--blue-100);
+}
+
+.stepper button:first-child { border-right: 1px solid var(--slate-300); }
+.stepper button:last-child { border-left: 1px solid var(--slate-300); }
+
+/* Container da tabela verdade, permite rolagem horizontal em telas pequenas. */
+#tabela-container {
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 1rem;
+}
+
+/* Estilo geral da tabela verdade. */
+table {
+    border-collapse: collapse;
+    box-shadow: var(--shadow-md);
+    border-radius: var(--border-radius);
+    overflow: hidden; /* Essencial para que a borda arredondada funcione. */
+    font-size: 1rem;
+    flex-shrink: 0; /* Impede que a tabela encolha quando o espaço é limitado. */
+}
+
+th, td {
+    padding: 0.75rem 1rem;
+    text-align: center;
+    border: 1px solid var(--slate-200);
+}
+
+thead th {
+    width: 75px;
+    background-color: var(--slate-800);
+    color: var(--white);
+    font-weight: 500;
+}
+
+/* Estilo "zebrado" para melhorar a legibilidade das linhas. */
+tbody tr:nth-child(even) {
+    background-color: var(--slate-100);
+}
+
+tbody tr:hover {
+    background-color: var(--blue-100);
+}
+
+/* Célula de saída da tabela (S), que é clicável. */
+.output-cell {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--slate-800);
+    user-select: none; /* Impede a seleção de texto ao clicar. */
+    transition: background-color 0.2s;
+    font-weight: bold;
+}
+
+/* Estilo específico para o valor "Don't Care" (X). */
+.output-cell.x-value {
+    color: var(--orange);
+}
+
+.output-cell.one-value {
+    color: var(--blue-900);
+}
+
+/* Estilo para botões de ação principal, como "Gerar Mapa". */
+.btn-primary {
+    background-color: var(--blue-600);
+    color: var(--white);
+    font-size: 1.125rem;
+    font-weight: 500;
+    padding: 0.875rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+    transform: translateY(-2px); /* Efeito sutil de elevação. */
+}
+
+/* Estilos específicos para a tela do Mapa de Karnaugh. */
+.map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+/* Botão secundário, como "Voltar". */
+.btn-secondary {
+    background-color: var(--blue-600);
+    color: var(--white);
+    font-size: 1.125rem;
+    font-weight: 500;
+    padding: 0.875rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary:hover {
+    background-color: #1d4ed8;
+    transform: translateY(-2px);
+}
+
+/* Container que agrupa o mapa e a expressão resultante. */
+.results-content {
+    display: flex;
+    flex-wrap: wrap; /* Permite que os itens quebrem para a próxima linha em telas menores. */
+    justify-content: center;
+    align-items: center;
+    gap: 3rem;
+    margin-top: 1rem;
+}
+
+.kmap-and-expression {
+    display: block
+}
+
+#kmap-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.kmap-sub-grid-container {
+    position: relative; /* Contexto de posicionamento para os grupos. */
+}
+
+/* Grid principal que forma o Mapa de Karnaugh. */
+.kmap {
+    display: grid;
+    font-family: var(--font-mono);
+    color: var(--red);
+    font-weight: bold;
+    margin: 15px;
+}
+
+/* Células individuais do mapa. */
+.kmap-cell {
+    width: 120px;
+    height: 120px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid var(--slate-800);
+    box-sizing: border-box;
+    font-size: 1.25rem;
+    color: var(--slate-800);
+}
+
+.kmap-cell.x-value {
+    color: var(--orange);
+}
+
+.kmap-cell.one-value {
+    color: var(--blue-900);
+}
+
+/* Cabeçalhos de variáveis ao redor do mapa. */
+.kmap-header {
+    display: flex;
+    padding: 10px;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.4rem;
+    font-family: var(--font-mono);
+    color: var(--red);
+    font-weight: bold;
+}
+
+/*
+ * Estilo do retângulo que visualiza um grupo simplificado.
+ * Ele é posicionado usando 'grid-area' pelo JavaScript e preenche
+ * a área designada, sobrepondo-se às células do mapa.
+ */
+.kmap-group {
+    border: solid; /* A cor é definida dinamicamente via JS. */
+    border-radius: 15px;
+    box-sizing: border-box;
+    pointer-events: none; /* Permite cliques "através" do grupo. */
+    opacity: 0.8;
+    z-index: 10; /* Garante que o grupo fique sobre as células. */
+}
+
+/* Container para a expressão booleana simplificada. */
+#expression-container {
+    margin-top: 1.25rem;
+    padding: 1.25rem;
+    background-color: var(--slate-100);
+    border-radius: var(--border-radius);
+    text-align: center;
+}
+
+#expression-container h2 {
+    margin: 0 0 0.75rem 0;
+    color: var(--slate-800);
+    font-size: 1.5rem;
+}
+
+/* Estilo do texto da expressão final. */
+#simplified-expression {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--blue-600);
+    min-height: 30px;
+    letter-spacing: 1.5px;
+}
+
+/* Container para os botões de ação na tela do mapa */
+.action-buttons {
+    display: flex;
+    gap: 1rem; /* Espaçamento entre os botões */
+    justify-content: center;
+    width: 100%; /* Ocupa toda a largura para centralizar o conteúdo */
+    margin-top: 1.5rem; /* Espaçamento acima dos botões */
+    flex-wrap: wrap; /* Permite que os botões quebrem a linha em telas menores */
+}
