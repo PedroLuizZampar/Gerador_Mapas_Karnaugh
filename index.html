@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
@@ -30,7 +33,7 @@
         </div>
 
         <div id="tabela-container">
-        </div>
+            </div>
     </main>
 
     <div id="map-view" class="view-container">
@@ -42,18 +45,21 @@
         <div class="results-content">
             <div class="kmap-and-expression">
                 <div id="kmap-container">
-                </div>
+                    </div>
 
                 <div id="expression-container">
                     <h2>Expressão Simplificada</h2>
                     <p id="simplified-expression">S = ?</p>
+                    
+                    <div id="simplification-steps-container" style="display: none;"></div>
                 </div>
             </div>
-
-            <div class="action-buttons">
-                <button id="btn-copiar-expressao" class="btn-secondary">Copiar Expressão</button>
-                <button id="btn-salvar-jpg" class="btn-secondary">Salvar como JPG</button>
-            </div>
+        </div>
+        
+        <div class="action-buttons">
+            <button id="btn-mostrar-passos" class="btn-secondary">Mostrar Passos</button>
+            <button id="btn-copiar-expressao" class="btn-secondary">Copiar Expressão</button>
+            <button id="btn-salvar-jpg" class="btn-secondary">Salvar como JPG</button>
         </div>
     </div>
 

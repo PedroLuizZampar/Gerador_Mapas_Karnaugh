@@ -12,15 +12,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnVoltar = document.getElementById('btn-voltar');
     const btnCopiarExpressao = document.getElementById('btn-copiar-expressao');
     const btnSalvarJPG = document.getElementById('btn-salvar-jpg');
+    const btnMostrarPassos = document.getElementById('btn-mostrar-passos');
+    const stepsContainer = document.getElementById('simplification-steps-container');
 
-    // Define constantes globais para a aplicação.
-    const estadosSaida = ['0', '1', 'X']; // Valores possíveis para a saída da tabela verdade.
-    const VAR_NAMES = ['A', 'B', 'C', 'D', 'E', 'F']; // Nomes das variáveis.
-    const GROUP_COLORS = ['#f44336', '#2196f3', '#4caf50', '#ffc107', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722']; // Cores para os grupos no Mapa de Karnaugh.
+    // Define constantes e variáveis globais.
+    const estadosSaida = ['0', '1', 'X'];
+    const VAR_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const GROUP_COLORS = ['#f44336', '#2196f3', '#4caf50', '#ffc107', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722'];
+    let simplificationStepsLog = []; // Armazena o log dos passos de simplificação.
 
     /**
-     * Alterna a visibilidade entre a tela da tabela verdade e a tela do mapa.
-     * @param {HTMLElement} viewToShow - O container da tela que deve ser exibido.
+     * Função que alterna a visibilidade entre as telas da aplicação.
      */
     const switchView = (viewToShow) => {
         document.querySelectorAll('.view-container').forEach(view => {
@@ -28,13 +30,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         viewToShow.classList.add('active');
     };
-    
+
     /**
-     * Função principal que orquestra a geração e exibição do Mapa de Karnaugh.
-     * Lê os valores da tabela, gera as estruturas de dados, desenha o mapa,
-     * executa a simplificação e exibe o resultado.
+     * Função principal que orquestra todo o processo.
      */
     const gerarMapaEExibir = () => {
+        simplificationStepsLog = [];
+        stepsContainer.style.display = 'none';
+        stepsContainer.innerHTML = '';
+        btnMostrarPassos.textContent = 'Mostrar Passos';
+
         const numVariaveis = parseInt(numVariaveisInput.value);
         const truthTableValues = lerValoresTabela();
         const { kmapMatrices, gridConfig } = gerarMatrizesKmap(numVariaveis, truthTableValues);
@@ -44,23 +49,86 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { finalGroups, expression } = simplificar(numVariaveis, kmapMatrices);
 
-            // Limpa o conteúdo anterior e prepara para receber o HTML.
-            expressionElement.innerHTML = 'S = '; 
+            expressionElement.innerHTML = 'S = ';
 
-            // Trata os casos onde a expressão é um valor constante (0 ou 1) ou não há grupos.
             if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
                 expressionElement.innerHTML += (expression || '0');
-            } else {
-                // Mapeia cada grupo final para um <span> colorido.
-                const termosColoridosHTML = finalGroups.map((group, i) => {
-                    const termo = getTermForGroup(numVariaveis, group);
-                    const cor = GROUP_COLORS[i % GROUP_COLORS.length];
-                    return `<span style="color: ${cor}; font-weight: 700;">${termo}</span>`;
-                }).join(' + '); // Junta os termos com o operador '+'.
-
-                expressionElement.innerHTML += termosColoridosHTML;
+                btnMostrarPassos.style.display = 'none';
+                desenharGrupos(finalGroups || [], gridConfig);
+                switchView(mapView);
+                return;
             }
+            btnMostrarPassos.style.display = 'inline-block';
+            
+            // --- ORQUESTRAÇÃO DOS PASSOS DE SIMPLIFICAÇÃO ---
+            let stepCounter = 0;
+            let currentTerms = finalGroups.map((group, i) => ({
+                term: getTermForGroup(numVariaveis, group),
+                color: GROUP_COLORS[i % GROUP_COLORS.length]
+            }));
+
+            // Passo 0: Expressão Inicial
+            simplificationStepsLog.push({
+                title: `Passo ${stepCounter++}: Expressão Inicial (Soma de Produtos)`,
+                termsWithMeta: [...currentTerms],
+                plainExpression: formatExpressionFromTerms(currentTerms),
+                explanation: 'Esta é a expressão booleana simplificada usando o método de Quine-McCluskey. As cores correspondem aos agrupamentos no mapa.'
+            });
+
+            // Loop principal de simplificação: continua aplicando as regras até que a expressão não mude mais.
+            let changedInLoop = true;
+            while(changedInLoop) {
+                const termsBeforeLoop = JSON.stringify(currentTerms);
+                let somethingChangedThisCycle = false;
+
+                // Passo 1: Simplificação com XOR/XNOR
+                const xorTerms = processXorSimplification(currentTerms);
+                if (JSON.stringify(xorTerms) !== JSON.stringify(currentTerms)) {
+                    simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Simplificação com XOR/XNOR`,
+                        termsWithMeta: [...xorTerms],
+                        plainExpression: formatExpressionFromTerms(xorTerms),
+                        explanation: 'Identificamos pares de termos que correspondem às portas XOR (A\'B + AB\') e XNOR (A\'B\' + AB) e os substituímos.'
+                    });
+                    currentTerms = xorTerms;
+                    somethingChangedThisCycle = true;
+                }
+
+                // Passo 2 (Iterativo): Simplificação Composta
+                const { newTerms, changed, explanation } = processOneCompoundStep(currentTerms);
+                if (changed) {
+                    simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Simplificação Composta (Associativa)`,
+                        termsWithMeta: [...newTerms],
+                        plainExpression: formatExpressionFromTerms(newTerms),
+                        explanation: explanation
+                    });
+                    currentTerms = newTerms;
+                    somethingChangedThisCycle = true;
+                }
+
+                // Passo Final: Fatoração
+                const factoredTerms = processFactoring(currentTerms);
+                if (JSON.stringify(factoredTerms) !== JSON.stringify(currentTerms)) {
+                     simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Fatoração de Termos Comuns`,
+                        termsWithMeta: [...factoredTerms],
+                        plainExpression: formatExpressionFromTerms(factoredTerms),
+                        explanation: 'Aplicamos a propriedade distributiva (XY + XZ = X(Y+Z)) para encontrar a combinação de fatores que mais reduz a expressão.'
+                    });
+                    currentTerms = factoredTerms;
+                    somethingChangedThisCycle = true;
+                }
+                
+                if (!somethingChangedThisCycle) {
+                    changedInLoop = false;
+                }
+            }
+            
+            // Exibe a expressão final, totalmente simplificada e SEM CORES.
+            expressionElement.innerHTML = 'S = ' + formatExpressionHTML(currentTerms, false);
             desenharGrupos(finalGroups, gridConfig);
+
         } catch (e) {
             console.error("Erro durante a simplificação:", e);
             expressionElement.textContent = "S = Erro na simplificação";
@@ -70,825 +138,436 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /**
-     * Gera e renderiza a tabela verdade no HTML com base no número de variáveis selecionado.
+     * Formata uma lista de termos em uma string de expressão HTML.
      */
-    function gerarTabelaVerdade() {
-        const numVars = parseInt(numVariaveisInput.value);
-        tabelaContainer.innerHTML = '';
-        const numLinhas = Math.pow(2, numVars);
-        const table = document.createElement('table');
-        table.innerHTML = `
+    function formatExpressionHTML(terms, useColors = true) {
+        return terms.map(meta => {
+            const termText = meta.term.replace(/'/g, '’');
+            if (useColors) {
+                return `<span style="color: ${meta.color}; font-weight: 700;">${termText}</span>`;
+            }
+            // Retorna o termo sem cor, apenas com o peso da fonte.
+            return `<span style="font-weight: 700;">${termText}</span>`;
+        }).join(' + ');
+    }
+
+    /**
+     * Formata uma lista de termos em uma string de expressão de texto puro para cópia.
+     */
+    function formatExpressionFromTerms(terms) {
+        return 'S = ' + terms.map(t => t.term).join(' + ');
+    }
+    
+    // --- Funções de Geração de Tabela e Mapa (sem alterações) ---
+    function gerarTabelaVerdade(){const numVars=parseInt(numVariaveisInput.value);tabelaContainer.innerHTML="";const numLinhas=Math.pow(2,numVars);const table=document.createElement("table");table.innerHTML=`
             <thead>
                 <tr>
-                    ${VAR_NAMES.slice(0, numVars).map(v => `<th>${v}</th>`).join('')}
+                    ${VAR_NAMES.slice(0,numVars).map(v=>`<th>${v}</th>`).join("")}
                     <th>S</th>
                 </tr>
             </thead>
             <tbody>
-                ${Array.from({ length: numLinhas }, (_, i) => `
+                ${Array.from({length:numLinhas},(_,i)=>`
                     <tr>
-                        ${i.toString(2).padStart(numVars, '0').split('').map(bit => `<td>${bit}</td>`).join('')}
+                        ${i.toString(2).padStart(numVars,"0").split("").map(bit=>`<td>${bit}</td>`).join("")}
                         <td class="output-cell" data-current-state="0">0</td>
                     </tr>
-                `).join('')}
+                `).join("")}
             </tbody>
-        `;
-        // Adiciona um evento de clique a cada célula de saída para alternar entre '0', '1' e 'X'.
-        table.querySelectorAll('.output-cell').forEach(cell => {
-            cell.addEventListener('click', () => {
-                let currentStateIndex = (parseInt(cell.dataset.currentState) + 1) % estadosSaida.length;
-                cell.textContent = estadosSaida[currentStateIndex];
-                cell.dataset.currentState = currentStateIndex;
-                cell.classList.toggle('x-value', cell.textContent === 'X');
-                cell.classList.toggle('one-value', cell.textContent === '1');
-            });
-        });
-        tabelaContainer.appendChild(table);
-    }
+        `;table.querySelectorAll(".output-cell").forEach(cell=>{cell.addEventListener("click",()=>{let currentStateIndex=(parseInt(cell.dataset.currentState)+1)%estadosSaida.length;cell.textContent=estadosSaida[currentStateIndex];cell.dataset.currentState=currentStateIndex;cell.classList.toggle("x-value",cell.textContent==="X");cell.classList.toggle("one-value",cell.textContent==="1")})});tabelaContainer.appendChild(table)}
+    function lerValoresTabela(){return Array.from(document.querySelectorAll(".output-cell")).map(cell=>cell.textContent)}
+    function getKmapGridConfig(numVars){if(numVars===2)return{rows:2,cols:2,numSubGrids:1,varsLeft:["A"],varsTop:["B"]};if(numVars===3)return{rows:2,cols:4,numSubGrids:1,varsLeft:["A"],varsTop:["B","C"]};if(numVars===4)return{rows:4,cols:4,numSubGrids:1,varsLeft:["A","B"],varsTop:["C","D"]};if(numVars===5)return{rows:4,cols:4,numSubGrids:2,varsSub:["A"],varsLeft:["B","C"],varsTop:["D","E"]};if(numVars===6)return{rows:4,cols:4,numSubGrids:4,varsSub:["A","B"],varsLeft:["C","D"],varsTop:["E","F"]};return{}}
+    function ttIndexToKmapPos(index,numVars){const bin=index.toString(2).padStart(numVars,"0");const grayCode=[0,1,3,2];let row,col,grid=0;switch(numVars){case 2:row=parseInt(bin[0],2);col=parseInt(bin[1],2);break;case 3:row=parseInt(bin[0],2);col=grayCode.indexOf(parseInt(bin.substring(1,3),2));break;case 4:row=grayCode.indexOf(parseInt(bin.substring(0,2),2));col=grayCode.indexOf(parseInt(bin.substring(2,4),2));break;case 5:grid=parseInt(bin[0],2);row=grayCode.indexOf(parseInt(bin.substring(1,3),2));col=grayCode.indexOf(parseInt(bin.substring(3,5),2));break;case 6:grid=grayCode.indexOf(parseInt(bin.substring(0,2),2));row=grayCode.indexOf(parseInt(bin.substring(2,4),2));col=grayCode.indexOf(parseInt(bin.substring(4,6),2));break}return{grid,row,col}}
+    function kmapPosToTTIndex(pos,numVars){let bin="";const grayCode=[0,1,3,2];switch(numVars){case 2:bin=`${pos.row.toString(2)}${pos.col.toString(2)}`;break;case 3:bin=`${pos.row.toString(2)}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 4:bin=`${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 5:bin=`${pos.grid.toString(2)}${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 6:bin=`${grayCode[pos.grid].toString(2).padStart(2,"0")}${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break}return parseInt(bin,2)}
+    function gerarMatrizesKmap(numVars,values){const gridConfig=getKmapGridConfig(numVars);if(!gridConfig.rows)return{kmapMatrices:[],gridConfig:{}};const kmapMatrices=Array.from({length:gridConfig.numSubGrids},()=>Array(gridConfig.rows).fill(null).map(()=>Array(gridConfig.cols).fill(null)));values.forEach((val,index)=>{const pos=ttIndexToKmapPos(index,numVars);if(kmapMatrices[pos.grid]?.[pos.row]!==undefined){kmapMatrices[pos.grid][pos.row][pos.col]=val}});return{kmapMatrices,gridConfig}}
+    function desenharMapaK(numVars,kmapMatrices,gridConfig){kmapContainer.innerHTML="";if(!gridConfig.rows)return;const mainWrapper=document.createElement("div");kmapContainer.appendChild(mainWrapper);const buildMapGrid=(matrix,gridIndex,vars)=>{const{varsLeft,varsTop}=vars;const hasSplitLeft=varsLeft.length>1;const hasSplitTop=varsTop.length>1;const leftHeaderCols=varsLeft.length>0?1:0;const headerRows=varsTop.length>0?1:0;const totalRows=headerRows+gridConfig.rows+(hasSplitTop?1:0);const totalCols=leftHeaderCols+gridConfig.cols+(hasSplitLeft?1:0);const mapContainer=document.createElement("div");mapContainer.className="kmap-sub-grid-container";const kmap=document.createElement("div");kmap.className="kmap";kmap.id=`kmap-grid-${gridIndex}`;kmap.style.display="grid";kmap.style.gridTemplateRows=`repeat(${totalRows}, auto)`;kmap.style.gridTemplateColumns=`repeat(${totalCols}, auto)`;const corner=document.createElement("div");corner.style.gridArea=`1 / 1 / ${headerRows+1} / ${leftHeaderCols+1}`;kmap.appendChild(corner);if(varsTop.length>0){const mainVar=varsTop[0];const labels=[`${mainVar}'`,mainVar];const colSpan=gridConfig.cols/labels.length;labels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`1 / ${leftHeaderCols+1+i*colSpan} / 2 / ${leftHeaderCols+1+(i*colSpan+colSpan)}`;kmap.appendChild(h)})}
+    if(hasSplitTop){const subVar=varsTop[1];const subLabels=[`${subVar}'`,subVar,subVar,`${subVar}'`];const bottomRowGridStart=headerRows+gridConfig.rows+1;subLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${bottomRowGridStart} / ${leftHeaderCols+1+i} / ${bottomRowGridStart+1} / ${leftHeaderCols+2+i}`;kmap.appendChild(h)})}
+    if(varsLeft.length>0){const mainVar=varsLeft[0];const labels=[`${mainVar}'`,mainVar];const rowSpan=gridConfig.rows/labels.length;labels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${headerRows+1+i*rowSpan} / 1 / ${headerRows+1+(i*rowSpan+rowSpan)} / 2`;kmap.appendChild(h)})}
+    if(hasSplitLeft){const subVar=varsLeft[1];const subLabels=[`${subVar}'`,subVar,subVar,`${subVar}'`];const rightHeaderColStart=leftHeaderCols+gridConfig.cols+1;subLabels.forEach((label,r)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${headerRows+1+r} / ${rightHeaderColStart} / ${headerRows+2+r} / ${rightHeaderColStart+1}`;kmap.appendChild(h)})}
+    matrix.forEach((rowData,r)=>{rowData.forEach((cellData,c)=>{const cell=document.createElement("div");cell.className="kmap-cell";if(cellData==="X")cell.classList.add("x-value");if(cellData==="1")cell.classList.add("one-value");cell.textContent=cellData;cell.style.gridArea=`${headerRows+1+r} / ${leftHeaderCols+1+c} / ${headerRows+2+r} / ${leftHeaderCols+2+c}`;kmap.appendChild(cell)})});mapContainer.appendChild(kmap);return mapContainer};if(numVars<=4){mainWrapper.appendChild(buildMapGrid(kmapMatrices[0],0,gridConfig))}else if(numVars===5){mainWrapper.style.display="flex";mainWrapper.style.alignItems="center";mainWrapper.style.gap="20px";const divA0=document.createElement("div");const divA1=document.createElement("div");divA0.innerHTML=`<h3>${gridConfig.varsSub[0]}'</h3>`;divA1.innerHTML=`<h3>${gridConfig.varsSub[0]}</h3>`;divA0.appendChild(buildMapGrid(kmapMatrices[0],0,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));divA1.appendChild(buildMapGrid(kmapMatrices[1],1,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));mainWrapper.append(divA0,divA1)}else if(numVars===6){mainWrapper.style.display="grid";mainWrapper.style.gridTemplateColumns="auto auto auto";mainWrapper.style.gridTemplateRows="auto auto auto";mainWrapper.style.gap="5px 15px";mainWrapper.style.alignItems="center";mainWrapper.style.justifyItems="center";const mainGridVarV=gridConfig.varsSub[0];const mainGridVarH=gridConfig.varsSub[1];const corner=document.createElement("div");corner.style.gridArea="1 / 1";mainWrapper.appendChild(corner);const topLabels=[`${mainGridVarH}'`,mainGridVarH];topLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`1 / ${2+i}`;mainWrapper.appendChild(h)});const leftLabels=[`${mainGridVarV}'`,mainGridVarV];leftLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.padding="10px";h.style.gridArea=`${2+i} / 1`;mainWrapper.appendChild(h)});const subGridConfig={varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop};const placement={"0":"2 / 2","1":"2 / 3","3":"3 / 2","2":"3 / 3"};kmapMatrices.forEach((matrix,index)=>{const map=buildMapGrid(matrix,index,subGridConfig);map.style.gridArea=placement[index];mainWrapper.appendChild(map)})}}
+    function desenharGrupos(groups,gridConfig){document.querySelectorAll(".kmap-group").forEach(el=>el.remove());const{rows,cols}=gridConfig;const BORDER_WIDTH=4;const drawRect=(rect,color,groupIndex)=>{const kmapGrid=document.getElementById(`kmap-grid-${rect.grid}`);if(!kmapGrid)return;const numVariaveis=parseInt(numVariaveisInput.value);const subGridConfig=numVariaveis<=4?gridConfig:{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop};const leftHeaderCols=subGridConfig.varsLeft.length>0?1:0;const topHeaderRows=subGridConfig.varsTop.length>0?1:0;const groupDiv=document.createElement("div");groupDiv.className="kmap-group";groupDiv.style.borderColor=color;groupDiv.style.margin=`${groupIndex*BORDER_WIDTH}px`;groupDiv.style.borderWidth=`${BORDER_WIDTH}px`;groupDiv.style.gridArea=`${topHeaderRows+rect.r+1} / ${leftHeaderCols+rect.c+1} / ${topHeaderRows+rect.r+1+rect.h} / ${leftHeaderCols+rect.c+1+rect.w}`;kmapGrid.appendChild(groupDiv)};groups.forEach((group,i)=>{const color=GROUP_COLORS[i%GROUP_COLORS.length];const numVars=parseInt(numVariaveisInput.value);const groupPos=group.map(ttIndex=>ttIndexToKmapPos(ttIndex,numVars));const groupCellsByGrid={};groupPos.forEach(pos=>{if(!groupCellsByGrid[pos.grid])groupCellsByGrid[pos.grid]=[];groupCellsByGrid[pos.grid].push(pos)});for(const grid in groupCellsByGrid){const rects=findRectanglesForDrawing(groupCellsByGrid[grid],rows,cols);rects.forEach(r=>drawRect({...r,grid:parseInt(grid)},color,i))}})}
+    function findRectanglesForDrawing(cells,maxRow,maxCol){if(cells.length===0)return[];const visited=new Set;const rectangles=[];const cellSet=new Set(cells.map(c=>`${c.row}-${c.col}`));cells.sort((a,b)=>a.row-b.row||a.col-b.col);cells.forEach(startCell=>{const key=`${startCell.row}-${startCell.col}`;if(visited.has(key))return;const possibleSizes=[{w:4,h:4},{w:4,h:2},{w:2,h:4},{w:4,h:1},{w:1,h:4},{w:2,h:2},{w:2,h:1},{w:1,h:2},{w:1,h:1}];for(const size of possibleSizes){if(canFormRectangle(startCell,size,cellSet,maxRow,maxCol,visited)){const rect=createRectangle(startCell,size,maxRow,maxCol,visited);rectangles.push(...rect);break}}});return rectangles}
+    function canFormRectangle(startCell,size,cellSet,maxRow,maxCol,visited){for(let r=0;r<size.h;r++){for(let c=0;c<size.w;c++){const row=(startCell.row+r)%maxRow;const col=(startCell.col+c)%maxCol;if(!cellSet.has(`${row}-${col}`)||visited.has(`${row}-${col}`))return false}}return true}
+    function createRectangle(startCell,size,maxRow,maxCol,visited){const rectangles=[];for(let r=0;r<size.h;r++){for(let c=0;c<size.w;c++)visited.add(`${(startCell.row+r)%maxRow}-${(startCell.col+c)%maxCol}`)}
+    if(startCell.col+size.w>maxCol){const w1=maxCol-startCell.col;const w2=size.w-w1;rectangles.push({r:startCell.row,c:startCell.col,w:w1,h:size.h});rectangles.push({r:startCell.row,c:0,w:w2,h:size.h})}else if(startCell.row+size.h>maxRow){const h1=maxRow-startCell.row;const h2=size.h-h1;rectangles.push({r:startCell.row,c:startCell.col,w:size.w,h:h1});rectangles.push({r:0,c:startCell.col,w:size.w,h:h2})}else{rectangles.push({r:startCell.row,c:startCell.col,w:size.w,h:size.h})}
+    return rectangles}
+    function simplificar(numVars,matrices){const minterms=[],dontCares=[];matrices.forEach((matrix,grid)=>{matrix.forEach((row,r)=>{row.forEach((val,c)=>{if(val==="1"||val==="X"){const ttIndex=kmapPosToTTIndex({grid,row:r,col:c},numVars);if(val==="1")minterms.push(ttIndex);if(val==="X")dontCares.push(ttIndex)}})})});if(minterms.length===0)return{expression:"0",finalGroups:[]};const allTerms=[...minterms,...dontCares];if(allTerms.length===Math.pow(2,numVars))return{expression:"1",finalGroups:[Array.from({length:Math.pow(2,numVars)},(_,i)=>i)]};const primeImplicants=findPrimeImplicants(numVars,allTerms);const finalGroups=selectMinimalCover(primeImplicants,minterms);const expression=finalGroups.map(group=>getTermForGroup(numVars,group)).filter(Boolean).join(" + ");return{finalGroups,expression}}
+    function findPrimeImplicants(numVars,terms){if(terms.length===0)return[];let currentLevel=new Map;terms.forEach(term=>{const ones=(term.toString(2).match(/1/g)||[]).length;if(!currentLevel.has(ones))currentLevel.set(ones,[]);currentLevel.get(ones).push({term,mask:0})});const primeImplicants=[];while(currentLevel.size>0){const nextLevel=new Map;const combined=new Set;for(let ones=0;ones<numVars;ones++){const group1=currentLevel.get(ones)||[];const group2=currentLevel.get(ones+1)||[];group1.forEach((item1,i1)=>{group2.forEach((item2,i2)=>{if(canCombineItems(item1,item2)){const newItem=combineItems(item1,item2);const newOnes=(newItem.term.toString(2).match(/1/g)||[]).length;if(!nextLevel.has(newOnes))nextLevel.set(newOnes,[]);if(!nextLevel.get(newOnes).some(ex=>ex.term===newItem.term&&ex.mask===newItem.mask))nextLevel.get(newOnes).push(newItem);combined.add(`${ones}-${i1}`);combined.add(`${ones+1}-${i2}`)}})})};currentLevel.forEach((group,ones)=>{group.forEach((item,index)=>{if(!combined.has(`${ones}-${index}`))primeImplicants.push(expandImplicant(item,numVars))})});currentLevel=nextLevel}
+    return primeImplicants}
+    function canCombineItems(item1,item2){const diff=item1.term^item2.term;return item1.mask===item2.mask&&diff>0&&(diff&(diff-1))===0}
+    function combineItems(item1,item2){return{term:item1.term&item2.term,mask:item1.mask|(item1.term^item2.term)}}
+    function expandImplicant(item,numVars){const terms=[];const dontCareBits=[];for(let i=0;i<numVars;i++)if(item.mask&(1<<i))dontCareBits.push(i);for(let i=0;i<(1<<dontCareBits.length);i++){let newTerm=item.term;for(let j=0;j<dontCareBits.length;j++)if(i&(1<<j))newTerm|=1<<dontCareBits[j];terms.push(newTerm)}
+    return terms.sort((a,b)=>a-b)}
+    function selectMinimalCover(primeImplicants,minterms){if(minterms.length===0)return[];const mintermSet=new Set(minterms);const coverage=new Map(minterms.map(mt=>[mt,[]]));primeImplicants.forEach((pi,index)=>pi.forEach(term=>{if(coverage.has(term))coverage.get(term).push(index)}));const finalGroups=[];const usedMinterms=new Set;const essentialPIs=new Set;coverage.forEach(piList=>{if(piList.length===1)essentialPIs.add(piList[0])});essentialPIs.forEach(piIndex=>{finalGroups.push(primeImplicants[piIndex]);primeImplicants[piIndex].forEach(term=>{if(mintermSet.has(term))usedMinterms.add(term)})});const uncoveredMinterms=new Set(minterms.filter(mt=>!usedMinterms.has(mt)));const remainingPIs=primeImplicants.filter((_,index)=>!essentialPIs.has(index));while(uncoveredMinterms.size>0){let bestPi=null,maxCovered=0,bestPiIndex=-1;remainingPIs.forEach((pi,index)=>{const coveredCount=pi.filter(term=>uncoveredMinterms.has(term)).length;if(coveredCount>maxCovered){maxCovered=coveredCount;bestPi=pi;bestPiIndex=index}
+    else if(coveredCount>0&&coveredCount===maxCovered&&pi.length>(bestPi?.length||0)){bestPi=pi;bestPiIndex=index}});if(!bestPi)break;finalGroups.push(bestPi);bestPi.forEach(term=>uncoveredMinterms.delete(term));if(bestPiIndex>-1)remainingPIs.splice(bestPiIndex,1)}
+    return finalGroups}
+    function getTermForGroup(numVars,group){if(group.length===Math.pow(2,numVars))return"1";let term="";const binaries=group.map(g=>g.toString(2).padStart(numVars,"0"));for(let i=0;i<numVars;i++){const firstBit=binaries[0][i];if(binaries.every(b=>b[i]===firstBit)){term+=VAR_NAMES[i];if(firstBit==="0")term+="'"}}
+    const termParts=term.match(/[A-F]'?/g);if(!termParts)return"";return termParts.sort((a,b)=>a.localeCompare(b)).join("")}
 
-    /**
-     * Lê os valores de saída da tabela verdade no HTML e retorna como um array.
-     * @returns {string[]} Um array com os valores '0', '1' ou 'X'.
-     */
-    function lerValoresTabela() {
-        return Array.from(document.querySelectorAll('.output-cell')).map(cell => cell.textContent);
-    }
-
-    /**
-     * Retorna a configuração de grid (linhas, colunas, etc.) para o Mapa de Karnaugh
-     * com base no número de variáveis.
-     * @param {number} numVars - O número de variáveis.
-     * @returns {object} Objeto com a configuração do grid.
-     */
-    function getKmapGridConfig(numVars) {
-        if (numVars === 2) return { rows: 2, cols: 2, numSubGrids: 1, varsLeft: ['A'], varsTop: ['B'] };
-        if (numVars === 3) return { rows: 2, cols: 4, numSubGrids: 1, varsLeft: ['A'], varsTop: ['B', 'C'] };
-        if (numVars === 4) return { rows: 4, cols: 4, numSubGrids: 1, varsLeft: ['A', 'B'], varsTop: ['C', 'D'] };
-        if (numVars === 5) return { rows: 4, cols: 4, numSubGrids: 2, varsSub: ['A'], varsLeft: ['B', 'C'], varsTop: ['D', 'E'] };
-        if (numVars === 6) return { rows: 4, cols: 4, numSubGrids: 4, varsSub: ['A', 'B'], varsLeft: ['C', 'D'], varsTop: ['E', 'F'] };
-        return {};
-    }
-
-    /**
-     * Converte um índice da tabela verdade para sua posição correspondente no Mapa de Karnaugh (grid, linha, coluna).
-     * Utiliza o código de Gray para o mapeamento correto.
-     * @param {number} index - O índice da linha na tabela verdade.
-     * @param {number} numVars - O número de variáveis.
-     * @returns {{grid: number, row: number, col: number}} A posição no mapa.
-     */
-    function ttIndexToKmapPos(index, numVars) {
-        const bin = index.toString(2).padStart(numVars, '0');
-        const grayCode = [0, 1, 3, 2]; // Código de Gray para 2 bits
-        let row, col, grid = 0;
-        
-        switch (numVars) {
-            case 2:
-                row = parseInt(bin[0], 2);
-                col = parseInt(bin[1], 2);
-                break;
-            case 3:
-                row = parseInt(bin[0], 2);
-                col = grayCode.indexOf(parseInt(bin.substring(1, 3), 2));
-                break;
-            case 4:
-                row = grayCode.indexOf(parseInt(bin.substring(0, 2), 2));
-                col = grayCode.indexOf(parseInt(bin.substring(2, 4), 2));
-                break;
-            case 5:
-                grid = parseInt(bin[0], 2);
-                row = grayCode.indexOf(parseInt(bin.substring(1, 3), 2));
-                col = grayCode.indexOf(parseInt(bin.substring(3, 5), 2));
-                break;
-            case 6:
-                const subGridVal = parseInt(bin.substring(0, 2), 2);
-                grid = grayCode.indexOf(subGridVal);
-                row = grayCode.indexOf(parseInt(bin.substring(2, 4), 2));
-                col = grayCode.indexOf(parseInt(bin.substring(4, 6), 2));
-                break;
-        }
-        return { grid, row, col };
-    }
+    // --- Funções de Simplificação Avançada ---
     
-    /**
-     * Converte uma posição no Mapa de Karnaugh (grid, linha, coluna) de volta para o índice da tabela verdade.
-     * @param {{grid: number, row: number, col: number}} pos - A posição no mapa.
-     * @param {number} numVars - O número de variáveis.
-     * @returns {number} O índice da linha na tabela verdade.
-     */
-    function kmapPosToTTIndex(pos, numVars) {
-        let bin = '';
-        const grayCode = [0, 1, 3, 2];
-        
-        switch (numVars) {
-            case 2:
-                bin = `${pos.row.toString(2)}${pos.col.toString(2)}`;
-                break;
-            case 3:
-                const rowVal3 = pos.row.toString(2);
-                const colVal3 = grayCode[pos.col].toString(2).padStart(2, '0');
-                bin = `${rowVal3}${colVal3}`;
-                break;
-            case 4:
-                const rowVal4 = grayCode[pos.row].toString(2).padStart(2, '0');
-                const colVal4 = grayCode[pos.col].toString(2).padStart(2, '0');
-                bin = `${rowVal4}${colVal4}`;
-                break;
-            case 5:
-                const gridVal5 = pos.grid.toString(2);
-                const rowVal5 = grayCode[pos.row].toString(2).padStart(2, '0');
-                const colVal5 = grayCode[pos.col].toString(2).padStart(2, '0');
-                bin = `${gridVal5}${rowVal5}${colVal5}`;
-                break;
-            case 6:
-                const gridBinaryValue = grayCode[pos.grid];
-                const gridVal6 = gridBinaryValue.toString(2).padStart(2, '0');
-                const rowVal6 = grayCode[pos.row].toString(2).padStart(2, '0');
-                const colVal6 = grayCode[pos.col].toString(2).padStart(2, '0');
-                bin = `${gridVal6}${rowVal6}${colVal6}`;
-                break;
-        }
-        return parseInt(bin, 2);
-    }
-
-    /**
-     * Cria as matrizes que representam o Mapa de Karnaugh a partir dos valores da tabela verdade.
-     * @param {number} numVars - O número de variáveis.
-     * @param {string[]} values - Array de valores de saída da tabela verdade.
-     * @returns {{kmapMatrices: Array<Array<string[]>>, gridConfig: object}} As matrizes do mapa e sua configuração.
-     */
-    function gerarMatrizesKmap(numVars, values) {
-        const gridConfig = getKmapGridConfig(numVars);
-        if (!gridConfig.rows) return { kmapMatrices: [], gridConfig: {} };
-        
-        const kmapMatrices = Array.from({ length: gridConfig.numSubGrids }, () =>
-            Array(gridConfig.rows).fill(null).map(() => Array(gridConfig.cols).fill(null))
-        );
-        
-        values.forEach((val, index) => {
-            const pos = ttIndexToKmapPos(index, numVars);
-            if (kmapMatrices[pos.grid]?.[pos.row] !== undefined) {
-                kmapMatrices[pos.grid][pos.row][pos.col] = val;
-            }
-        });
-        
-        return { kmapMatrices, gridConfig };
-    }
-
-    /**
-     * Desenha a estrutura visual do Mapa de Karnaugh (grids, cabeçalhos e células) no HTML.
-     * @param {number} numVars - O número de variáveis.
-     * @param {Array<Array<string[]>>} kmapMatrices - As matrizes de dados do mapa.
-     * @param {object} gridConfig - A configuração de layout do mapa.
-     */
-    function desenharMapaK(numVars, kmapMatrices, gridConfig) {
-        kmapContainer.innerHTML = '';
-        if (!gridConfig.rows) return;
-
-        const mainWrapper = document.createElement('div');
-        kmapContainer.appendChild(mainWrapper);
-
-        // Função auxiliar para construir um sub-grid individual do mapa.
-        const buildMapGrid = (matrix, gridIndex, vars) => {
-            const { varsLeft, varsTop } = vars;
-            const hasSplitLeft = varsLeft.length > 1;
-            const hasSplitTop = varsTop.length > 1;
-
-            const leftHeaderCols = varsLeft.length > 0 ? 1 : 0;
-            const rightHeaderCols = hasSplitLeft ? 1 : 0;
-            const headerRows = varsTop.length > 0 ? 1 : 0;
-            
-            const totalRows = headerRows + gridConfig.rows + (hasSplitTop ? 1 : 0);
-            const totalCols = leftHeaderCols + gridConfig.cols + rightHeaderCols;
-
-            const mapContainer = document.createElement('div');
-            mapContainer.className = 'kmap-sub-grid-container';
-            const kmap = document.createElement('div');
-            kmap.className = 'kmap';
-            kmap.id = `kmap-grid-${gridIndex}`;
-            kmap.style.display = 'grid';
-            kmap.style.gridTemplateRows = `repeat(${totalRows}, auto)`;
-            kmap.style.gridTemplateColumns = `repeat(${totalCols}, auto)`;
-            
-            // Adiciona cabeçalhos (nomes das variáveis) ao redor do grid.
-            const corner = document.createElement('div');
-            corner.style.gridArea = `1 / 1 / ${headerRows + 1} / ${leftHeaderCols + 1}`;
-            kmap.appendChild(corner);
-            
-            if (varsTop.length > 0) {
-                const mainVar = varsTop[0];
-                const labels = [`${mainVar}'`, mainVar];
-                const colSpan = gridConfig.cols / labels.length;
-                labels.forEach((label, i) => {
-                    const h = document.createElement('div');
-                    h.className = 'kmap-header'; h.textContent = label;
-                    h.style.gridArea = `1 / ${leftHeaderCols + 1 + (i * colSpan)} / 2 / ${leftHeaderCols + 1 + (i * colSpan) + colSpan}`;
-                    kmap.appendChild(h);
-                });
-            }
-            
-            if (hasSplitTop) {
-                const subVar = varsTop[1];
-                const subLabels = [`${subVar}'`, subVar, subVar, `${subVar}'`];
-                const bottomRowGridStart = headerRows + gridConfig.rows + 1;
-                subLabels.forEach((label, i) => {
-                     const h = document.createElement('div');
-                     h.className = 'kmap-header'; h.textContent = label;
-                     h.style.gridArea = `${bottomRowGridStart} / ${leftHeaderCols + 1 + i} / ${bottomRowGridStart + 1} / ${leftHeaderCols + 2 + i}`;
-                     kmap.appendChild(h);
-                });
-            }
-
-            if (varsLeft.length > 0) {
-                const mainVar = varsLeft[0];
-                const labels = [`${mainVar}'`, mainVar];
-                const rowSpan = gridConfig.rows / labels.length;
-                labels.forEach((label, i) => {
-                    const h = document.createElement('div');
-                    h.className = 'kmap-header'; h.textContent = label;
-                    h.style.gridArea = `${headerRows + 1 + (i * rowSpan)} / 1 / ${headerRows + 1 + (i * rowSpan) + rowSpan} / 2`;
-                    kmap.appendChild(h);
-                });
-            }
-
-            if (hasSplitLeft) {
-                const subVar = varsLeft[1];
-                const subLabels = [`${subVar}'`, subVar, subVar, `${subVar}'`];
-                const rightHeaderColStart = leftHeaderCols + gridConfig.cols + 1;
-                subLabels.forEach((label, r) => {
-                    const h = document.createElement('div');
-                    h.className = 'kmap-header'; h.textContent = label;
-                    h.style.gridArea = `${headerRows + 1 + r} / ${rightHeaderColStart} / ${headerRows + 2 + r} / ${rightHeaderColStart + 1}`;
-                    kmap.appendChild(h);
-                });
-            }
-
-            // Preenche as células do mapa com os valores 0, 1 ou X.
-            matrix.forEach((rowData, r) => {
-                rowData.forEach((cellData, c) => {
-                    const cell = document.createElement('div');
-                    cell.className = 'kmap-cell';
-                    if (cellData === 'X') cell.classList.add('x-value');
-                    if (cellData === '1') cell.classList.add('one-value');
-                    cell.textContent = cellData;
-                    cell.style.gridArea = `${headerRows + 1 + r} / ${leftHeaderCols + 1 + c} / ${headerRows + 2 + r} / ${leftHeaderCols + 2 + c}`;
-                    kmap.appendChild(cell);
-                });
+    function processXorSimplification(termsWithMeta) {
+        const parseTerm = (termStr) => {
+            const vars = {};
+            if (termStr === '1') return vars;
+            const parts = termStr.match(/[A-F]'?/g) || [];
+            parts.forEach(part => {
+                vars[part.charAt(0)] = !part.includes("'");
             });
-
-            mapContainer.appendChild(kmap);
-            return mapContainer;
+            return vars;
         };
-
-        // Organiza os sub-grids dependendo do número de variáveis.
-        if (numVars <= 5) {
-            if (numVars <= 4) {
-                 mainWrapper.appendChild(buildMapGrid(kmapMatrices[0], 0, gridConfig));
-            } else { // 5 variáveis
-                mainWrapper.style.display = 'flex';
-                mainWrapper.style.alignItems = 'center';
-                mainWrapper.style.gap = '20px';
-                const divA0 = document.createElement('div');
-                const divA1 = document.createElement('div');
-                divA0.innerHTML = `<h3>${gridConfig.varsSub[0]}'</h3>`;
-                divA1.innerHTML = `<h3>${gridConfig.varsSub[0]}</h3>`;
-                divA0.appendChild(buildMapGrid(kmapMatrices[0], 0, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop }));
-                divA1.appendChild(buildMapGrid(kmapMatrices[1], 1, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop }));
-                mainWrapper.append(divA0, divA1);
-            }
-        } else if (numVars === 6) { // 6 variáveis
-            mainWrapper.style.display = 'grid';
-            mainWrapper.style.gridTemplateColumns = 'auto auto auto';
-            mainWrapper.style.gridTemplateRows = 'auto auto auto';
-            mainWrapper.style.gap = '5px 15px';
-            mainWrapper.style.alignItems = 'center';
-            mainWrapper.style.justifyItems = 'center';
-
-            const mainGridVarV = gridConfig.varsSub[0];
-            const mainGridVarH = gridConfig.varsSub[1];
-
-            const corner = document.createElement('div');
-            corner.style.gridArea = '1 / 1';
-            mainWrapper.appendChild(corner);
-
-            const topLabels = [`${mainGridVarH}'`, mainGridVarH];
-            topLabels.forEach((label, i) => {
-                const h = document.createElement('div');
-                h.className = 'kmap-header'; h.textContent = label;
-                h.style.gridArea = `1 / ${2 + i}`;
-                mainWrapper.appendChild(h);
+        const formatPrefix = (prefixVars) => {
+            let term = '';
+            Object.keys(prefixVars).sort().forEach(v => {
+                term += v;
+                if (!prefixVars[v]) term += "'";
             });
-
-            const leftLabels = [`${mainGridVarV}'`, mainGridVarV];
-            leftLabels.forEach((label, i) => {
-                const h = document.createElement('div');
-                h.className = 'kmap-header'; h.textContent = label;
-                h.style.padding = '10px';
-                h.style.gridArea = `${2 + i} / 1`;
-                mainWrapper.appendChild(h);
-            });
-
-            const subGridConfig = { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop };
-            const placement = { '0': '2 / 2', '1': '2 / 3', '3': '3 / 2', '2': '3 / 3' }; // Posições dos sub-grids usando Gray Code
-
-            kmapMatrices.forEach((matrix, index) => {
-                const map = buildMapGrid(matrix, index, subGridConfig);
-                map.style.gridArea = placement[index];
-                mainWrapper.appendChild(map);
-            });
-        }
-    }
-    
-    /**
-     * Desenha os retângulos coloridos sobre o Mapa de Karnaugh para visualizar os grupos simplificados.
-     * Esta versão usa margens para "aninhar" as bordas de grupos sobrepostos.
-     * @param {Array<number[]>} groups - Array de grupos, onde cada grupo é um array de mintermos.
-     * @param {object} gridConfig - A configuração de layout do mapa.
-     */
-    function desenharGrupos(groups, gridConfig) {
-        document.querySelectorAll('.kmap-group').forEach(el => el.remove());
-        const { rows, cols } = gridConfig;
-        const BORDER_WIDTH = 4; // Largura da borda em pixels, para o cálculo da margem.
-
-        // Função auxiliar para desenhar um retângulo específico de um grupo.
-        // Adicionamos o 'groupIndex' para calcular o recuo da margem.
-        const drawRect = (rect, color, groupIndex) => {
-            const kmapGrid = document.getElementById(`kmap-grid-${rect.grid}`);
-            if (!kmapGrid) return;
-            
-            const numVariaveis = parseInt(numVariaveisInput.value);
-            const subGridConfig = (numVariaveis <= 4) ? gridConfig : { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop };
-            const leftHeaderCols = subGridConfig.varsLeft.length > 0 ? 1 : 0;
-            const topHeaderRows = subGridConfig.varsTop.length > 0 ? 1 : 0;
-
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'kmap-group';
-            groupDiv.style.borderColor = color;
-
-            // Calcula a margem com base no índice do grupo.
-            // O primeiro grupo (índice 0) tem margem 0.
-            // O segundo (índice 1) tem margem de 4px, e assim por diante.
-            const marginSize = groupIndex * BORDER_WIDTH;
-            groupDiv.style.margin = `${marginSize}px`;
-            
-            groupDiv.style.borderWidth = `${BORDER_WIDTH}px`;
-
-            const rowStart = topHeaderRows + rect.r + 1;
-            const colStart = leftHeaderCols + rect.c + 1;
-            const rowEnd = rowStart + rect.h;
-            const colEnd = colStart + rect.w;
-
-            groupDiv.style.gridArea = `${rowStart} / ${colStart} / ${rowEnd} / ${colEnd}`;
-            kmapGrid.appendChild(groupDiv);
+            return term;
         };
-
-        // Itera sobre cada grupo final da simplificação.
-        groups.forEach((group, i) => {
-            const color = GROUP_COLORS[i % GROUP_COLORS.length];
-            const numVars = parseInt(numVariaveisInput.value);
-            
-            const groupPos = group.map(ttIndex => ttIndexToKmapPos(ttIndex, numVars));
-            
-            const groupCellsByGrid = {};
-            groupPos.forEach(pos => {
-                if (!groupCellsByGrid[pos.grid]) groupCellsByGrid[pos.grid] = [];
-                groupCellsByGrid[pos.grid].push(pos);
-            });
-            
-            for (const grid in groupCellsByGrid) {
-                const rects = findRectanglesForDrawing(groupCellsByGrid[grid], rows, cols);
-                // Passamos o índice do grupo 'i' para a função drawRect.
-                rects.forEach(r => drawRect({ ...r, grid: parseInt(grid) }, color, i));
-            }
-        });
-    }
-
-    /**
-     * Algoritmo auxiliar para encontrar os retângulos que representam um grupo de células,
-     * lidando com a adjacência circular (wrap-around) do mapa.
-     * @param {object[]} cells - Células pertencentes a um grupo em um único grid.
-     * @param {number} maxRow - Número de linhas no grid.
-     * @param {number} maxCol - Número de colunas no grid.
-     * @returns {object[]} Um array de objetos representando os retângulos a serem desenhados.
-     */
-    function findRectanglesForDrawing(cells, maxRow, maxCol) {
-        if (cells.length === 0) return [];
-        
-        const visited = new Set();
-        const rectangles = [];
-        const cellSet = new Set(cells.map(c => `${c.row}-${c.col}`));
-        
-        cells.sort((a, b) => a.row - b.row || a.col - b.col);
-        
-        cells.forEach(startCell => {
-            const key = `${startCell.row}-${startCell.col}`;
-            if (visited.has(key)) return;
-            
-            // Tenta encontrar o maior retângulo possível (potências de 2) a partir da célula atual.
-            const possibleSizes = [
-                {w: 4, h: 4}, {w: 4, h: 2}, {w: 2, h: 4},
-                {w: 4, h: 1}, {w: 1, h: 4}, {w: 2, h: 2},
-                {w: 2, h: 1}, {w: 1, h: 2}, {w: 1, h: 1}
-            ];
-            
-            for (const size of possibleSizes) {
-                if (canFormRectangle(startCell, size, cellSet, maxRow, maxCol, visited)) {
-                    const rect = createRectangle(startCell, size, maxRow, maxCol, visited);
-                    rectangles.push(...rect);
+        const originalTerms = [...termsWithMeta];
+        const newTerms = [];
+        const usedIndices = new Set();
+        for (let i = 0; i < originalTerms.length; i++) {
+            if (usedIndices.has(i)) continue;
+            let foundPair = false;
+            for (let j = i + 1; j < originalTerms.length; j++) {
+                if (usedIndices.has(j)) continue;
+                const term1 = originalTerms[i];
+                const term2 = originalTerms[j];
+                const parsed1 = parseTerm(term1.term);
+                const parsed2 = parseTerm(term2.term);
+                const allVars = new Set([...Object.keys(parsed1), ...Object.keys(parsed2)]);
+                const prefixVars = {};
+                const diffVars = [];
+                let canBePair = true;
+                for (const v of allVars) {
+                    const s1 = parsed1[v];
+                    const s2 = parsed2[v];
+                    if (s1 !== undefined && s1 === s2) {
+                        prefixVars[v] = s1;
+                    } else if (s1 !== undefined && s2 !== undefined && s1 !== s2) {
+                        diffVars.push(v);
+                    } else {
+                        canBePair = false;
+                        break;
+                    }
+                }
+                if (!canBePair || diffVars.length !== 2) continue;
+                const [vA, vB] = diffVars.sort();
+                const isXor = (parsed1[vA] !== parsed1[vB]);
+                const isXnor = (parsed1[vA] === parsed1[vB]);
+                if (isXor || isXnor) {
+                    const prefixStr = formatPrefix(prefixVars);
+                    let newTermStr = isXor ? `(${vA} ⊕ ${vB})` : `(${vA} ⊕ ${vB})'`;
+                    if (prefixStr) {
+                        newTermStr = `${prefixStr}${newTermStr}`;
+                    }
+                    newTerms.push({
+                        term: newTermStr,
+                        color: term1.color
+                    });
+                    usedIndices.add(i);
+                    usedIndices.add(j);
+                    foundPair = true;
                     break;
                 }
             }
-        });
-        
-        return rectangles;
+        }
+        for (let i = 0; i < originalTerms.length; i++) {
+            if (!usedIndices.has(i)) {
+                newTerms.push(originalTerms[i]);
+            }
+        }
+        return newTerms;
     }
 
-    /**
-     * Verifica se é possível formar um retângulo de um determinado tamanho a partir de uma célula inicial.
-     */
-    function canFormRectangle(startCell, size, cellSet, maxRow, maxCol, visited) {
-        for (let r = 0; r < size.h; r++) {
-            for (let c = 0; c < size.w; c++) {
-                const row = (startCell.row + r) % maxRow;
-                const col = (startCell.col + c) % maxCol;
-                const key = `${row}-${col}`;
-                if (!cellSet.has(key) || visited.has(key)) {
-                    return false;
+    function processOneCompoundStep(termsWithMeta) {
+        const parseCompoundTerm = (termStr) => {
+            const match = termStr.match(/^(.*?)\((.*⊕.*)\)('?)$/);
+            if (match) {
+                return {
+                    prefixStr: match[1] || '',
+                    xorPart: match[2],
+                    isXnor: match[3] === "'"
+                };
+            }
+            return { prefixStr: termStr, xorPart: null, isXnor: false };
+        };
+        const parseTerm = (termStr) => {
+            const vars = {};
+            if (termStr === '1' || termStr === '') return vars;
+            const parts = termStr.match(/[A-F]'?/g) || [];
+            parts.forEach(part => {
+                vars[part.charAt(0)] = !part.includes("'");
+            });
+            return vars;
+        };
+        const formatPrefix = (prefixVars) => {
+            let term = '';
+            Object.keys(prefixVars).sort().forEach(v => {
+                term += v;
+                if (!prefixVars[v]) term += "'";
+            });
+            return term;
+        };
+        const checkPrefixInverse = (p1, p2) => {
+            const allVars = new Set([...Object.keys(p1), ...Object.keys(p2)]);
+            const commonPrefix = {};
+            const diffVars = [];
+            for (const v of allVars) {
+                const s1 = p1[v];
+                const s2 = p2[v];
+                if (s1 !== undefined && s1 === s2) {
+                    commonPrefix[v] = s1;
+                } else if (s1 !== undefined && s2 !== undefined && s1 !== s2) {
+                    diffVars.push(v);
+                } else {
+                    return { isInverse: false };
+                }
+            }
+            if (diffVars.length === 1) {
+                return { isInverse: true, diffVar: diffVars[0], commonPrefix };
+            }
+            return { isInverse: false };
+        };
+        const currentTerms = [...termsWithMeta];
+        for (let i = 0; i < currentTerms.length; i++) {
+            for (let j = i + 1; j < currentTerms.length; j++) {
+                const term1 = currentTerms[i];
+                const term2 = currentTerms[j];
+                const parsed1 = parseCompoundTerm(term1.term);
+                const parsed2 = parseCompoundTerm(term2.term);
+                if (parsed1.xorPart && parsed2.xorPart && parsed1.xorPart === parsed2.xorPart && parsed1.isXnor !== parsed2.isXnor) {
+                    const prefix1 = parseTerm(parsed1.prefixStr);
+                    const prefix2 = parseTerm(parsed2.prefixStr);
+                    const { isInverse, diffVar, commonPrefix } = checkPrefixInverse(prefix1, prefix2);
+                    if (isInverse) {
+                        const commonPrefixStr = formatPrefix(commonPrefix);
+                        const allXorVars = [diffVar, ...parsed1.xorPart.split(' ⊕ ')].flat().sort();
+                        let newTermStr = allXorVars.join(' ⊕ ');
+                        if (commonPrefixStr) {
+                            newTermStr = `${commonPrefixStr}(${newTermStr})`;
+                        }
+                        const newTermsList = [...currentTerms];
+                        newTermsList.splice(j, 1);
+                        newTermsList.splice(i, 1, {
+                            term: newTermStr,
+                            color: term1.color
+                        });
+                        const explanation = `Analisando os termos <strong>${term1.term}</strong> e <strong>${term2.term}</strong>, reconhecemos o padrão <code>P'Q + PQ'</code> onde <code>P = ${diffVar}</code> e <code>Q = (${parsed1.xorPart})</code>. Isso simplifica para <code>P ⊕ Q</code>, resultando na expressão combinada.`;
+                        return {
+                            newTerms: newTermsList,
+                            changed: true,
+                            explanation: explanation
+                        };
+                    }
                 }
             }
         }
-        return true;
+        return {
+            newTerms: currentTerms,
+            changed: false,
+            explanation: ""
+        };
     }
+    
+    function processFactoring(termsWithMeta) {
+        const simpleTerms = termsWithMeta.filter(t => !t.term.includes('⊕') && !t.term.includes('('));
+        const complexTerms = termsWithMeta.filter(t => t.term.includes('⊕') || t.term.includes('('));
+        if (simpleTerms.length < 2) {
+            return termsWithMeta;
+        }
+        const bestFactoredExpression = findBestFactoring(simpleTerms);
+        return [...bestFactoredExpression, ...complexTerms];
+    }
+    
+    function findBestFactoring(terms) {
+        if (terms.length < 2) {
+            return terms;
+        }
+        const potentialFactors = generatePotentialFactors(terms);
+        if (potentialFactors.length === 0) {
+            return terms;
+        }
+        let bestOutcome = {
+            terms: terms,
+            literals: countLiteralsInExpression(terms.map(t => t.term)),
+        };
+        for (const factor of potentialFactors) {
+            const groupTermSet = new Set(factor.group.map(t => t.term));
+            const leftoverTerms = terms.filter(t => !groupTermSet.has(t.term));
+            const remainders = factor.group.map(termObj => {
+                const termLiterals = new Set(termObj.term.match(/[A-F]'?/g) || []);
+                const prefixLiterals = new Set(factor.prefix.match(/[A-F]'?/g) || []);
+                const remainderLiterals = [...termLiterals].filter(lit => !prefixLiterals.has(lit));
+                return {
+                    term: remainderLiterals.length > 0 ? remainderLiterals.sort().join('') : '1',
+                    color: termObj.color
+                };
+            });
 
-    /**
-     * Cria os objetos de retângulo, dividindo-os se houver adjacência circular (wrap-around).
-     */
-    function createRectangle(startCell, size, maxRow, maxCol, visited) {
-        const rectangles = [];
-        
-        // Marca as células do retângulo como visitadas.
-        for (let r = 0; r < size.h; r++) {
-            for (let c = 0; c < size.w; c++) {
-                const row = (startCell.row + r) % maxRow;
-                const col = (startCell.col + c) % maxCol;
-                visited.add(`${row}-${col}`);
+            const simplifiedRemainders = runInnerSimplification(remainders);
+            
+            const newFactoredTermStr = `${factor.prefix}(${simplifiedRemainders.map(t => t.term).join(' + ')})`;
+            const newFactoredTerm = {
+                term: newFactoredTermStr,
+                color: factor.group[0].color
+            };
+            const bestOfLeftovers = findBestFactoring(leftoverTerms);
+            const currentPathTerms = [newFactoredTerm, ...bestOfLeftovers];
+            const currentPathLiterals = countLiteralsInExpression(currentPathTerms.map(t => t.term));
+            if (currentPathLiterals < bestOutcome.literals) {
+                bestOutcome = {
+                    terms: currentPathTerms,
+                    literals: currentPathLiterals,
+                };
             }
         }
-        
-        // Verifica e trata a adjacência circular.
-        if (startCell.col + size.w > maxCol) { // Quebra horizontal
-            const w1 = maxCol - startCell.col;
-            const w2 = size.w - w1;
-            rectangles.push({ r: startCell.row, c: startCell.col, w: w1, h: size.h });
-            rectangles.push({ r: startCell.row, c: 0, w: w2, h: size.h });
-        } else if (startCell.row + size.h > maxRow) { // Quebra vertical
-            const h1 = maxRow - startCell.row;
-            const h2 = size.h - h1;
-            rectangles.push({ r: startCell.row, c: startCell.col, w: size.w, h: h1 });
-            rectangles.push({ r: 0, c: startCell.col, w: size.w, h: h2 });
-        } else { // Retângulo simples, sem quebra.
-            rectangles.push({ r: startCell.row, c: startCell.col, w: size.w, h: size.h });
-        }
-        
-        return rectangles;
+        return bestOutcome.terms;
     }
 
-    /**
-     * Executa o algoritmo de simplificação de Quine-McCluskey.
-     * @param {number} numVars - O número de variáveis.
-     * @param {Array<Array<string[]>>} matrices - Matrizes de dados do mapa.
-     * @returns {{finalGroups: Array<number[]>, expression: string}} Os grupos finais e a expressão simplificada.
-     */
-    function simplificar(numVars, matrices) {
-        const minterms = [], dontCares = [];
-        
-        // Extrai mintermos ('1') e don't cares ('X') das matrizes.
-        matrices.forEach((matrix, grid) => {
-            matrix.forEach((row, r) => {
-                row.forEach((val, c) => {
-                    if (val === '1' || val === 'X') {
-                        const ttIndex = kmapPosToTTIndex({ grid, row: r, col: c }, numVars);
-                        if (val === '1') minterms.push(ttIndex);
-                        if (val === 'X') dontCares.push(ttIndex);
-                    }
-                });
+    function runInnerSimplification(terms) {
+        let currentTerms = [...terms];
+        currentTerms = processXorSimplification(currentTerms);
+        let changed = true;
+        while (changed) {
+            const result = processOneCompoundStep(currentTerms);
+            currentTerms = result.newTerms;
+            changed = result.changed;
+        }
+        return currentTerms;
+    }
+
+    function generatePotentialFactors(terms) {
+        const prefixMap = new Map();
+        terms.forEach(termObj => {
+            const prefixes = getPrefixes(termObj.term);
+            prefixes.forEach(p => {
+                if (!prefixMap.has(p)) {
+                    prefixMap.set(p, []);
+                }
+                prefixMap.get(p).push(termObj);
             });
         });
-
-        if (minterms.length === 0) return { expression: "0", finalGroups: [] };
-        
-        // Se todos os valores forem '1' ou 'X', a expressão é '1'.
-        const allPossibleMinterms = Math.pow(2, numVars);
-        const allTerms = [...minterms, ...dontCares];
-        if (allTerms.length === allPossibleMinterms) {
-            return { expression: "1", finalGroups: [Array.from({length: allPossibleMinterms}, (_, i) => i)] };
-        }
-
-        // Encontra todos os implicantes primos.
-        const primeImplicants = findPrimeImplicants(numVars, [...minterms, ...dontCares]);
-        
-        // Seleciona um conjunto mínimo de implicantes para cobrir todos os mintermos.
-        const finalGroups = selectMinimalCover(primeImplicants, minterms);
-
-        const expression = finalGroups
-            .map(group => getTermForGroup(numVars, group))
-            .filter(Boolean)
-            .join(' + ');
-            
-        return { finalGroups, expression };
-    }
-
-    /**
-     * Encontra todos os implicantes primos usando o método de Quine-McCluskey.
-     * @param {number} numVars - O número de variáveis.
-     * @param {number[]} terms - Um array de mintermos e don't cares.
-     * @returns {Array<number[]>} Um array de implicantes primos.
-     */
-    function findPrimeImplicants(numVars, terms) {
-        if (terms.length === 0) return [];
-        
-        // Agrupa os termos pelo número de '1's em sua representação binária.
-        let currentLevel = new Map();
-        terms.forEach(term => {
-            const ones = term.toString(2).split('1').length - 1;
-            if (!currentLevel.has(ones)) currentLevel.set(ones, []);
-            currentLevel.get(ones).push({ term, mask: 0 });
+        const potentialFactors = [];
+        prefixMap.forEach((group, prefix) => {
+            if (group.length > 1) {
+                potentialFactors.push({
+                    prefix: prefix,
+                    group: group,
+                    score: (group.length - 1) * prefix.length
+                });
+            }
         });
-        
-        const primeImplicants = [];
-        
-        // Combina iterativamente os termos para encontrar implicantes.
-        while (currentLevel.size > 0) {
-            const nextLevel = new Map();
-            const combined = new Set();
-            
-            // Tenta combinar termos de grupos adjacentes (que diferem por um '1').
-            for (let ones = 0; ones < numVars; ones++) {
-                const group1 = currentLevel.get(ones) || [];
-                const group2 = currentLevel.get(ones + 1) || [];
-                
-                group1.forEach((item1, i1) => {
-                    group2.forEach((item2, i2) => {
-                        if (canCombineItems(item1, item2)) {
-                            const newItem = combineItems(item1, item2);
-                            const newOnes = countOnesInItem(newItem, numVars);
-                            if (!nextLevel.has(newOnes)) nextLevel.set(newOnes, []);
-                            
-                            const exists = nextLevel.get(newOnes).some(existing => existing.term === newItem.term && existing.mask === newItem.mask);
-                            if (!exists) nextLevel.get(newOnes).push(newItem);
-                            
-                            combined.add(`${ones}-${i1}`);
-                            combined.add(`${ones + 1}-${i2}`);
-                        }
-                    });
-                });
+        return potentialFactors.sort((a, b) => b.score - a.score);
+    }
+
+    function getPrefixes(term) {
+        const literals = term.match(/[A-F]'?/g) || [];
+        if (literals.length === 0) return [];
+        const prefixes = new Set();
+        const n = literals.length;
+        for (let i = 1; i < (1 << n); i++) {
+            const subset = [];
+            for (let j = 0; j < n; j++) {
+                if ((i >> j) & 1) {
+                    subset.push(literals[j]);
+                }
             }
-            
-            // Termos que não puderam ser combinados são implicantes primos.
-            for (let ones = 0; ones <= numVars; ones++) {
-                const group = currentLevel.get(ones) || [];
-                group.forEach((item, index) => {
-                    if (!combined.has(`${ones}-${index}`)) {
-                        primeImplicants.push(expandImplicant(item, numVars));
-                    }
-                });
-            }
-            
-            currentLevel = nextLevel;
+            prefixes.add(subset.sort().join(''));
         }
-        
-        return primeImplicants;
+        return Array.from(prefixes);
     }
 
-    /** Funções auxiliares para `findPrimeImplicants` */
-    function canCombineItems(item1, item2) {
-        const diff = item1.term ^ item2.term;
-        return item1.mask === item2.mask && diff > 0 && (diff & (diff - 1)) === 0;
-    }
-
-    function combineItems(item1, item2) {
-        return { term: item1.term & item2.term, mask: item1.mask | (item1.term ^ item2.term) };
-    }
-
-
-
-    function countOnesInItem(item, numVars) {
+    function countLiteralsInExpression(termStrings) {
         let count = 0;
-        for (let i = 0; i < numVars; i++) {
-            if (!(item.mask & (1 << i)) && (item.term & (1 << i))) count++;
-        }
+        termStrings.forEach(str => {
+            const literals = str.match(/[A-F]'?/g);
+            if (literals) {
+                count += literals.length;
+            }
+        });
         return count;
     }
 
-    function expandImplicant(item, numVars) {
-        const terms = [];
-        const dontCareBits = [];
-        for (let i = 0; i < numVars; i++) {
-            if (item.mask & (1 << i)) dontCareBits.push(i);
-        }
-        const numCombinations = 1 << dontCareBits.length;
-        for (let i = 0; i < numCombinations; i++) {
-            let newTerm = item.term;
-            for (let j = 0; j < dontCareBits.length; j++) {
-                if (i & (1 << j)) newTerm |= (1 << dontCareBits[j]);
-            }
-            terms.push(newTerm);
-        }
-        return terms.sort((a, b) => a - b);
-    }
-
-    /**
-     * Seleciona um conjunto mínimo de implicantes primos que cobrem todos os mintermos essenciais.
-     * Utiliza a técnica da "tabela de implicantes primos".
-     * @param {Array<number[]>} primeImplicants - Todos os implicantes primos encontrados.
-     * @param {number[]} minterms - Os mintermos que precisam ser cobertos.
-     * @returns {Array<number[]>} Um conjunto mínimo de implicantes (grupos).
-     */
-    function selectMinimalCover(primeImplicants, minterms) {
-        if (minterms.length === 0) return [];
-
-        const mintermSet = new Set(minterms);
-        const coverage = new Map(minterms.map(mt => [mt, []]));
-
-        // Mapeia cada mintermo aos implicantes que o cobrem.
-        primeImplicants.forEach((pi, index) => {
-            pi.forEach(term => {
-                if (coverage.has(term)) coverage.get(term).push(index);
-            });
-        });
-
-        const finalGroups = [];
-        const usedMinterms = new Set();
-
-        // Fase 1: Encontra e adiciona implicantes primos essenciais.
-        const essentialPIs = new Set();
-        coverage.forEach((piList) => {
-            if (piList.length === 1) essentialPIs.add(piList[0]);
-        });
-
-        essentialPIs.forEach(piIndex => {
-            finalGroups.push(primeImplicants[piIndex]);
-            primeImplicants[piIndex].forEach(term => {
-                if (mintermSet.has(term)) usedMinterms.add(term);
-            });
-        });
-
-        // Fase 2: Cobre os mintermos restantes com uma abordagem "gulosa" (greedy).
-        const uncoveredMinterms = new Set(minterms.filter(mt => !usedMinterms.has(mt)));
-        const remainingPIs = primeImplicants.filter((_, index) => !essentialPIs.has(index));
-
-        while (uncoveredMinterms.size > 0) {
-            let bestPi = null, maxCovered = 0, bestPiIndex = -1;
-
-            // Encontra o implicante que cobre o maior número de mintermos restantes.
-            remainingPIs.forEach((pi, index) => {
-                const coveredCount = pi.filter(term => uncoveredMinterms.has(term)).length;
-                if (coveredCount > maxCovered) {
-                    maxCovered = coveredCount;
-                    bestPi = pi;
-                    bestPiIndex = index;
-                } else if (coveredCount > 0 && coveredCount === maxCovered) {
-                    // Como critério de desempate, prefere grupos maiores (termos mais simples).
-                    if (pi.length > (bestPi?.length || 0)) {
-                        bestPi = pi;
-                        bestPiIndex = index;
-                    }
-                }
-            });
-
-            if (!bestPi) break;
-
-            finalGroups.push(bestPi);
-            bestPi.forEach(term => uncoveredMinterms.delete(term));
-            if (bestPiIndex > -1) remainingPIs.splice(bestPiIndex, 1);
-        }
-        return finalGroups;
-    }
-
-    /**
-     * Converte um grupo de mintermos (ex: [0, 1, 4, 5]) para sua representação
-     * em termo algébrico (ex: A'C').
-     * @param {number} numVars - O número de variáveis.
-     * @param {number[]} group - Um array de mintermos que formam um grupo.
-     * @returns {string} O termo simplificado (ex: "A'B").
-     */
-    function getTermForGroup(numVars, group) {
-        if (group.length === Math.pow(2, numVars)) return "1";
-        
-        let term = '';
-        const binaries = group.map(g => g.toString(2).padStart(numVars, '0'));
-        
-        // Itera por cada posição de bit para encontrar as variáveis que não mudam.
-        for (let i = 0; i < numVars; i++) {
-            const firstBit = binaries[0][i];
-            if (binaries.every(b => b[i] === firstBit)) {
-                term += VAR_NAMES[i];
-                if (firstBit === '0') term += "'"; // Adiciona apóstrofo para variáveis negadas.
-            }
-        }
-        
-        // Ordena as variáveis para um formato padrão (ex: A'B em vez de BA').
-        const termParts = term.match(/[A-F]'?/g);
-        if (!termParts) return ""; 
-        
-        return termParts.sort((a, b) => a.localeCompare(b)).join('');
-    }
 
     // --- Configuração dos Eventos da Interface ---
 
-    // Incrementa o número de variáveis e gera a nova tabela.
-    btnIncrement.addEventListener('click', () => {
-        let valor = parseInt(numVariaveisInput.value);
-        if (valor < 6) {
-            numVariaveisInput.value = valor + 1;
-            gerarTabelaVerdade();
-        }
-    });
-
-    // Decrementa o número de variáveis e gera a nova tabela.
-    btnDecrement.addEventListener('click', () => {
-        let valor = parseInt(numVariaveisInput.value);
-        if (valor > 2) {
-            numVariaveisInput.value = valor - 1;
-            gerarTabelaVerdade();
-        }
-    });
-
-    // Dispara a geração do mapa e a simplificação.
+    btnIncrement.addEventListener('click', () => { let v = parseInt(numVariaveisInput.value); if (v < 6) { numVariaveisInput.value = v + 1; gerarTabelaVerdade(); } });
+    btnDecrement.addEventListener('click', () => { let v = parseInt(numVariaveisInput.value); if (v > 2) { numVariaveisInput.value = v - 1; gerarTabelaVerdade(); } });
     btnGerarMapa.addEventListener('click', gerarMapaEExibir);
-
-    // Retorna da tela do mapa para a tela da tabela.
-    btnVoltar.addEventListener('click', () => {
-        switchView(mainView);
-    });
-
-    /**
-     * Copia a expressão simplificada para a área de transferência do usuário.
-     * Fornece feedback visual no botão.
-     */
+    btnVoltar.addEventListener('click', () => switchView(mainView));
     btnCopiarExpressao.addEventListener('click', () => {
-        const expressaoTexto = expressionElement.textContent; // Pega o texto puro, sem HTML
-        
-        navigator.clipboard.writeText(expressaoTexto)
-            .then(() => {
-                // Sucesso! Muda o texto do botão temporariamente para dar feedback.
-                const originalText = btnCopiarExpressao.textContent;
-                btnCopiarExpressao.textContent = 'Copiado!';
-                setTimeout(() => {
-                    btnCopiarExpressao.textContent = originalText;
-                }, 2000); // Volta ao normal após 2 segundos
-            })
-            .catch(err => {
-                // Erro! Loga no console para depuração.
-                console.error('Falha ao copiar a expressão: ', err);
-                alert('Não foi possível copiar a expressão.');
-            });
+        navigator.clipboard.writeText(expressionElement.textContent).then(() => {
+            const originalText = btnCopiarExpressao.textContent; btnCopiarExpressao.textContent = 'Copiado!';
+            setTimeout(() => { btnCopiarExpressao.textContent = originalText; }, 2000);
+        }).catch(err => { console.error('Falha ao copiar expressão:', err); alert('Não foi possível copiar.'); });
     });
-
-    /**
-     * Captura a área do mapa de Karnaugh e a expressão como uma imagem JPG
-     * e inicia o download no navegador do usuário.
-     */
     btnSalvarJPG.addEventListener('click', () => {
-        // Seleciona o container que engloba tanto o mapa quanto a expressão
         const areaParaCapturar = document.querySelector('.kmap-and-expression');
-        
-        // Opções para a captura, como a cor de fundo
-        const options = {
-            backgroundColor: '#ffffff', // Fundo branco para a imagem
-            useCORS: true, // Necessário para imagens externas, se houver
-            scale: 2 // Aumenta a resolução da imagem para melhor qualidade
-        };
-
-        html2canvas(areaParaCapturar, options).then(canvas => {
-            // Cria um link temporário
+        html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
             const link = document.createElement('a');
-            
-            // Converte o canvas para uma imagem JPG e define como o href do link
-            link.href = canvas.toDataURL('image/jpeg', 0.9); // 0.9 é a qualidade da imagem
-            
-            // Define o nome do arquivo que será baixado
-            // Remove os 4 primeiros caracteres da expressão (ex: "S = ")
-            let expr = document.querySelector('#simplified-expression').textContent;
-            expr = expr.substring(4).trim();
-            link.download = `mapa-${expr}.jpg`;
-            
-            // Simula um clique no link para iniciar o download
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            let expr = expressionElement.textContent.substring(4).trim().replace(/[^a-zA-Z0-9-]/g, '');
+            link.download = `mapa-${expr || 'simplificado'}.jpg`;
             link.click();
-        }).catch(err => {
-            console.error('Erro ao gerar a imagem:', err);
-            alert('Ocorreu um erro ao tentar salvar a imagem.');
-        });
+        }).catch(err => { console.error('Erro ao salvar imagem:', err); alert('Ocorreu um erro ao salvar a imagem.'); });
     });
 
-    // Dispara a geração do mapa e a simplificação.
-    btnGerarMapa.addEventListener('click', gerarMapaEExibir);
+    btnMostrarPassos.addEventListener('click', () => {
+        const isHidden = stepsContainer.style.display === 'none';
+        if (isHidden) {
+            stepsContainer.innerHTML = '';
+            simplificationStepsLog.forEach((step, index) => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'step';
+                
+                // Apenas o Passo 0 (index 0) terá cores.
+                const useColors = (index === 0);
+                const expressionHTML = formatExpressionHTML(step.termsWithMeta, useColors);
 
-    // Retorna da tela do mapa para a tela da tabela.
-    btnVoltar.addEventListener('click', () => {
-        switchView(mainView);
+                stepDiv.innerHTML = `
+                    <div class="step-title">${step.title}</div>
+                    <div class="step-explanation">${step.explanation}</div>
+                    <div class="step-expression-container">
+                        <div class="step-expression">S = ${expressionHTML}</div>
+                        <button class="copy-step-btn" data-expression="${step.plainExpression}" title="Copiar expressão">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                `;
+                stepsContainer.appendChild(stepDiv);
+            });
+            stepsContainer.style.display = 'block';
+            btnMostrarPassos.textContent = 'Ocultar Passos';
+        } else {
+            stepsContainer.style.display = 'none';
+            btnMostrarPassos.textContent = 'Mostrar Passos';
+        }
+    });
+
+    stepsContainer.addEventListener('click', (event) => {
+        const copyBtn = event.target.closest('.copy-step-btn');
+        if (copyBtn) {
+            const textToCopy = copyBtn.dataset.expression;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const icon = copyBtn.querySelector('i');
+                icon.classList.remove('bi-clipboard');
+                icon.classList.add('bi-clipboard-check');
+                copyBtn.style.color = 'green';
+                
+                setTimeout(() => {
+                    icon.classList.remove('bi-clipboard-check');
+                    icon.classList.add('bi-clipboard');
+                    copyBtn.style.color = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Falha ao copiar: ', err);
+            });
+        }
     });
 
     // --- Inicialização da Aplicação ---
-    gerarTabelaVerdade(); // Gera a tabela inicial.
-    switchView(mainView); // Exibe a tela da tabela ao carregar.
+    gerarTabelaVerdade();
+    switchView(mainView);
 });

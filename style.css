@@ -260,10 +260,10 @@ tbody tr:hover {
 /* Container que agrupa o mapa e a expressão resultante. */
 .results-content {
     display: flex;
-    flex-wrap: wrap; /* Permite que os itens quebrem para a próxima linha em telas menores. */
+    flex-direction: column; /* Organiza os itens verticalmente */
     justify-content: center;
     align-items: center;
-    gap: 3rem;
+    gap: 1rem;
     margin-top: 1rem;
 }
 
@@ -325,8 +325,6 @@ tbody tr:hover {
 
 /*
  * Estilo do retângulo que visualiza um grupo simplificado.
- * Ele é posicionado usando 'grid-area' pelo JavaScript e preenche
- * a área designada, sobrepondo-se às células do mapa.
  */
 .kmap-group {
     border: solid; /* A cor é definida dinamicamente via JS. */
@@ -360,6 +358,7 @@ tbody tr:hover {
     color: var(--blue-600);
     min-height: 30px;
     letter-spacing: 1.5px;
+    word-break: break-all;
 }
 
 /* Container para os botões de ação na tela do mapa */
@@ -370,4 +369,76 @@ tbody tr:hover {
     width: 100%; /* Ocupa toda a largura para centralizar o conteúdo */
     margin-top: 1.5rem; /* Espaçamento acima dos botões */
     flex-wrap: wrap; /* Permite que os botões quebrem a linha em telas menores */
+}
+
+
+/* --- NOVOS ESTILOS PARA O PASSO A PASSO --- */
+
+#simplification-steps-container {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border-top: 2px solid var(--slate-200);
+    text-align: left;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.step {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--slate-200);
+}
+.step:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.step-title {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--slate-800);
+    margin-bottom: 0.5rem;
+}
+
+.step-explanation {
+    font-size: 1rem;
+    color: var(--slate-600);
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.step-expression-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background-color: var(--slate-200);
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.step-expression {
+    font-family: var(--font-mono);
+    word-break: break-all;
+    font-size: 1.1rem;
+    color: var(--blue-900);
+    flex-grow: 1; /* Faz a expressão ocupar o espaço disponível */
+}
+
+.copy-step-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--slate-600);
+    font-size: 1.25rem; /* Tamanho do ícone */
+    padding: 0.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.copy-step-btn:hover {
+    background-color: var(--slate-300);
 }
