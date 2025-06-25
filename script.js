@@ -10,20 +10,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapView = document.getElementById('map-view');
     const btnGerarMapa = document.getElementById('btn-gerar-mapa');
     const btnVoltar = document.getElementById('btn-voltar');
-    const btnCopiarExpressao = document.getElementById('btn-copiar-expressao');
+    const btnCopyMainExpression = document.getElementById('btn-copy-main-expression');
     const btnSalvarJPG = document.getElementById('btn-salvar-jpg');
     const btnMostrarPassos = document.getElementById('btn-mostrar-passos');
+    const btnCopySteps = document.getElementById('btn-copy-steps');
     const stepsContainer = document.getElementById('simplification-steps-container');
 
     // Define constantes e variáveis globais.
     const estadosSaida = ['0', '1', 'X'];
     const VAR_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
     const GROUP_COLORS = ['#f44336', '#2196f3', '#4caf50', '#ffc107', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722'];
-    let simplificationStepsLog = []; // Armazena o log dos passos de simplificação.
+    let simplificationStepsLog = [];
 
-    /**
-     * Função que alterna a visibilidade entre as telas da aplicação.
-     */
     const switchView = (viewToShow) => {
         document.querySelectorAll('.view-container').forEach(view => {
             view.classList.remove('active');
@@ -31,12 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
         viewToShow.classList.add('active');
     };
 
-    /**
-     * Função principal que orquestra todo o processo.
-     */
     const gerarMapaEExibir = () => {
         simplificationStepsLog = [];
         stepsContainer.style.display = 'none';
+        btnCopySteps.style.display = 'none';
         stepsContainer.innerHTML = '';
         btnMostrarPassos.textContent = 'Mostrar Passos';
 
@@ -49,10 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { finalGroups, expression } = simplificar(numVariaveis, kmapMatrices);
 
-            expressionElement.innerHTML = 'S = ';
+            expressionElement.innerHTML = 'S = ?';
+            btnCopyMainExpression.style.display = 'none';
 
             if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
-                expressionElement.innerHTML += (expression || '0');
+                expressionElement.innerHTML = 'S = ' + (expression || '0');
                 btnMostrarPassos.style.display = 'none';
                 desenharGrupos(finalGroups || [], gridConfig);
                 switchView(mapView);
@@ -60,14 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             btnMostrarPassos.style.display = 'inline-block';
             
-            // --- ORQUESTRAÇÃO DOS PASSOS DE SIMPLIFICAÇÃO ---
             let stepCounter = 0;
             let currentTerms = finalGroups.map((group, i) => ({
                 term: getTermForGroup(numVariaveis, group),
                 color: GROUP_COLORS[i % GROUP_COLORS.length]
             }));
 
-            // Passo 0: Expressão Inicial
             simplificationStepsLog.push({
                 title: `Passo ${stepCounter++}: Expressão Inicial (Soma de Produtos)`,
                 termsWithMeta: [...currentTerms],
@@ -75,60 +70,68 @@ document.addEventListener('DOMContentLoaded', () => {
                 explanation: 'Esta é a expressão booleana simplificada, obtida diretamente dos agrupamentos no mapa (usando o método de Quine-McCluskey). As cores correspondem aos grupos. A partir daqui, aplicaremos regras algébricas para simplificar ainda mais.'
             });
 
-            // Loop principal de simplificação: continua aplicando as regras até que a expressão não mude mais.
             let changedInLoop = true;
             while(changedInLoop) {
                 let somethingChangedThisCycle = false;
 
-                // --- Passo 1 (Iterativo): Fatoração de Termos Comuns ---
-                const factoredTerms = processFactoring(currentTerms);
-                if (JSON.stringify(factoredTerms) !== JSON.stringify(currentTerms)) {
-                     simplificationStepsLog.push({
-                        title: `Passo ${stepCounter++}: Fatoração de Termos Comuns`,
-                        termsWithMeta: [...factoredTerms],
-                        plainExpression: formatExpressionFromTerms(factoredTerms),
-                        explanation: 'Aplicamos a propriedade distributiva (XY + XZ = X(Y+Z)) para encontrar a combinação de fatores que mais reduz a expressão.'
+                const factorResult = processOneFactoringStep(currentTerms);
+                if (factorResult.changed) {
+                    simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Fatoração (Termo em Evidência)`,
+                        termsWithMeta: factorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(factorResult.newTerms),
+                        explanation: factorResult.explanation
                     });
-                    currentTerms = factoredTerms;
+                    currentTerms = factorResult.newTerms;
                     somethingChangedThisCycle = true;
-                    continue; // Reinicia o ciclo para tentar novas fatorações ou simplificações
+                    continue; 
                 }
 
-                // --- Passo 2 (Iterativo): Simplificação com XOR/XNOR ---
-                const xorTerms = processXorSimplification(currentTerms);
-                if (JSON.stringify(xorTerms) !== JSON.stringify(currentTerms)) {
+                // >>> Adicione a chamada para a nova função aqui <<<
+                const innerSimpResult = processInnerSimplificationStep(currentTerms);
+                if (innerSimpResult.changed) {
                     simplificationStepsLog.push({
-                        title: `Passo ${stepCounter++}: Simplificação com XOR/XNOR`,
-                        termsWithMeta: [...xorTerms],
-                        plainExpression: formatExpressionFromTerms(xorTerms),
-                        explanation: 'Identificamos pares de termos que correspondem às portas XOR (A\'B + AB\') e XNOR (A\'B\' + AB) e os substituímos.'
+                        title: `Passo ${stepCounter++}: Simplificação (Expressão Interna)`,
+                        termsWithMeta: innerSimpResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(innerSimpResult.newTerms),
+                        explanation: innerSimpResult.explanation
                     });
-                    currentTerms = xorTerms;
+                    currentTerms = innerSimpResult.newTerms;
                     somethingChangedThisCycle = true;
-                    continue; // Reinicia o ciclo
+                    continue;
+                }
+
+                const xorResult = processOneXorStep(currentTerms);
+                if (xorResult.changed) {
+                    simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Simplificação (Porta XOR/XNOR)`,
+                        termsWithMeta: xorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(xorResult.newTerms),
+                        explanation: xorResult.explanation
+                    });
+                    currentTerms = xorResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
                 }
                 
-                // --- Passo 3 (Iterativo): Simplificação Composta (Associativa) ---
-                const { newTerms, changed, explanation } = processOneCompoundStep(currentTerms);
-                if (changed) {
+                const compoundResult = processOneCompoundStep(currentTerms);
+                if (compoundResult.changed) {
                     simplificationStepsLog.push({
-                        title: `Passo ${stepCounter++}: Simplificação Composta (Associativa)`,
-                        termsWithMeta: [...newTerms],
-                        plainExpression: formatExpressionFromTerms(newTerms),
-                        explanation: explanation // A explicação já é gerada pela função
+                        title: `Passo ${stepCounter++}: Simplificação (Associativa)`,
+                        termsWithMeta: compoundResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(compoundResult.newTerms),
+                        explanation: compoundResult.explanation
                     });
-                    currentTerms = newTerms;
+                    currentTerms = compoundResult.newTerms;
                     somethingChangedThisCycle = true;
-                    continue; // Reinicia o ciclo
+                    continue;
                 }
 
-                // Se nenhuma simplificação foi feita nesta passagem, o processo termina.
                 if (!somethingChangedThisCycle) {
                     changedInLoop = false;
                 }
             }
             
-            // --- Passo Final Opcional: Conversão para Notação XNOR (⊙) ---
             let finalDisplayTerms = [...currentTerms];
             const needsXnorConversion = currentTerms.some(t => t.term.endsWith(")'"));
 
@@ -143,8 +146,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Exibe a expressão final, totalmente simplificada.
             expressionElement.innerHTML = 'S = ' + formatExpressionHTML(finalDisplayTerms, false);
+            btnCopyMainExpression.style.display = 'inline-flex';
             desenharGrupos(finalGroups, gridConfig);
 
         } catch (e) {
@@ -171,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'S = ' + termStrings.join(' + ');
     }
     
-    // --- Funções de Geração de Tabela e Mapa (sem alterações) ---
     function gerarTabelaVerdade(){const numVars=parseInt(numVariaveisInput.value);tabelaContainer.innerHTML="";const numLinhas=Math.pow(2,numVars);const table=document.createElement("table");table.innerHTML=`
             <thead>
                 <tr>
@@ -217,9 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getTermForGroup(numVars,group){if(group.length===Math.pow(2,numVars))return"1";let term="";const binaries=group.map(g=>g.toString(2).padStart(numVars,"0"));for(let i=0;i<numVars;i++){const firstBit=binaries[0][i];if(binaries.every(b=>b[i]===firstBit)){term+=VAR_NAMES[i];if(firstBit==="0")term+="'"}}
     const termParts=term.match(/[A-F]'?/g);if(!termParts)return"";return termParts.sort((a,b)=>a.localeCompare(b)).join("")}
 
-    // --- Funções de Simplificação Avançada ---
-    
-    function processXorSimplification(termsWithMeta) {
+    function processOneXorStep(termsWithMeta) {
         const parseTerm = (termStr) => {
             const vars = {};
             if (termStr === '1') return vars;
@@ -240,16 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const originalTerms = [...termsWithMeta];
-        const newTerms = [];
-        const usedIndices = new Set();
-
+        
         for (let i = 0; i < originalTerms.length; i++) {
-            if (usedIndices.has(i)) continue;
-
-            let foundPair = false;
             for (let j = i + 1; j < originalTerms.length; j++) {
-                if (usedIndices.has(j)) continue;
-
                 const term1 = originalTerms[i];
                 const term2 = originalTerms[j];
 
@@ -274,43 +267,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                if (diffVars.length !== 2) {
-                    continue;
-                }
-
+                if (diffVars.length !== 2) continue;
+                
                 const [v1, v2] = diffVars.sort();
 
-                if (parsed1[v1] === parsed2[v1] || parsed1[v2] === parsed2[v2]) {
-                    continue; 
-                }
+                if (parsed1[v1] === parsed2[v1] || parsed1[v2] === parsed2[v2]) continue;
                 
                 const isXnor = (parsed1[v1] === parsed1[v2]);
-
                 const prefixStr = formatPrefix(prefixVars);
                 let newTermStr = isXnor ? `(${v1} ⊕ ${v2})'` : `(${v1} ⊕ ${v2})`;
+                if (prefixStr) newTermStr = `${prefixStr}${newTermStr}`;
 
-                if (prefixStr) {
-                    newTermStr = `${prefixStr}${newTermStr}`;
-                }
+                const newTerms = [...originalTerms];
+                newTerms.splice(j, 1);
+                newTerms.splice(i, 1, { term: newTermStr, color: term1.color });
 
-                newTerms.push({
-                    term: newTermStr,
-                    color: term1.color 
-                });
-                usedIndices.add(i);
-                usedIndices.add(j);
-                foundPair = true;
-                break; 
-            }
-            if (foundPair) continue;
-        }
-
-        for (let i = 0; i < originalTerms.length; i++) {
-            if (!usedIndices.has(i)) {
-                newTerms.push(originalTerms[i]);
+                const explanation = `Os termos <strong>${term1.term}</strong> e <strong>${term2.term}</strong> foram combinados para formar o termo ${isXnor ? "XNOR" : "XOR"} <strong>${newTermStr}</strong>.`;
+                
+                return { newTerms, changed: true, explanation };
             }
         }
-        return newTerms;
+
+        return { changed: false };
     }
     
     function processOneCompoundStep(termsWithMeta) {
@@ -393,137 +371,169 @@ document.addEventListener('DOMContentLoaded', () => {
                            newTermStr += "'";
                         }
 
-                        if (commonPrefixStr) {
-                            newTermStr = `${commonPrefixStr}${newTermStr}`;
-                        }
+                        if (commonPrefixStr) newTermStr = `${commonPrefixStr}${newTermStr}`;
 
                         const newTermsList = [...currentTerms];
                         newTermsList.splice(j, 1);
-                        newTermsList.splice(i, 1, {
-                            term: newTermStr,
-                            color: term1.color
-                        });
+                        newTermsList.splice(i, 1, { term: newTermStr, color: term1.color });
 
-                        const explanation = `Analisando os termos <strong>${term1.term}</strong> e <strong>${term2.term}</strong>, reconhecemos um padrão do tipo <code>P'Q + PQ'</code> ou <code>P'Q' + PQ</code>. Isso é simplificado para uma única porta XOR ou XNOR.`;
-                        return {
-                            newTerms: newTermsList,
-                            changed: true,
-                            explanation: explanation
-                        };
+                        const explanation = `Analisando os termos <strong>${term1.term}</strong> e <strong>${term2.term}</strong>, reconhecemos o padrão <code>${finalIsXnor ? "P'Q' + PQ" : "P'Q + PQ'"}</code>. Isso simplifica para uma única porta ${finalIsXnor ? "XNOR" : "XOR"}, resultando em <strong>${newTermStr}</strong>.`;
+                        return { newTerms: newTermsList, changed: true, explanation };
                     }
                 }
             }
         }
-        return {
-            newTerms: currentTerms,
-            changed: false,
-            explanation: ""
-        };
+        return { changed: false };
     }
     
-    function processFactoring(termsWithMeta) {
-        const simpleTerms = termsWithMeta.filter(t => !t.term.includes('⊕') && !t.term.includes('('));
-        const complexTerms = termsWithMeta.filter(t => t.term.includes('⊕') || t.term.includes('('));
-        if (simpleTerms.length < 2) {
-            return termsWithMeta;
-        }
-        const bestFactoredExpression = findBestFactoring(simpleTerms);
-        return [...bestFactoredExpression, ...complexTerms];
-    }
-    
-    function findBestFactoring(terms) {
-        if (terms.length < 2) {
-            return terms;
-        }
-        const potentialFactors = generatePotentialFactors(terms);
-        if (potentialFactors.length === 0) {
-            return terms;
-        }
-        let bestOutcome = {
-            terms: terms,
-            literals: countLiteralsInExpression(terms.map(t => t.term)),
-        };
-        for (const factor of potentialFactors) {
-            const groupTermSet = new Set(factor.group.map(t => t.term));
-            const leftoverTerms = terms.filter(t => !groupTermSet.has(t.term));
-            const remainders = factor.group.map(termObj => {
-                const termLiterals = new Set(termObj.term.match(/[A-F]'?/g) || []);
-                const prefixLiterals = new Set(factor.prefix.match(/[A-F]'?/g) || []);
-                const remainderLiterals = [...termLiterals].filter(lit => !prefixLiterals.has(lit));
-                return {
-                    term: remainderLiterals.length > 0 ? remainderLiterals.sort().join('') : '1',
-                    color: termObj.color
-                };
-            });
+    function processOneFactoringStep(termsWithMeta) {
+        const simpleTerms = termsWithMeta.filter(t => !t.term.includes('('));
+        const complexTerms = termsWithMeta.filter(t => t.term.includes('('));
 
-            const simplifiedRemainders = runInnerSimplification(remainders);
-            
-            const remaindersStr = simplifiedRemainders.map(t => t.term).join(' + ');
-            let newFactoredTermStr;
+        if (simpleTerms.length < 2) return { changed: false };
+        
+        const potentialFactors = generatePotentialFactors(simpleTerms);
+        if (potentialFactors.length === 0) return { changed: false };
 
-            if (simplifiedRemainders.length === 1 && remaindersStr.includes('(')) {
-                newFactoredTermStr = `${factor.prefix}${remaindersStr}`;
-            } else {
-                newFactoredTermStr = `${factor.prefix}(${remaindersStr})`;
-            }
-            
-            const newFactoredTerm = {
-                term: newFactoredTermStr,
-                color: factor.group[0].color
+        const bestFactor = potentialFactors[0];
+        if (bestFactor.score <= 0) return { changed: false };
+        
+        const groupTermObjs = bestFactor.group;
+        const groupTermStrs = groupTermObjs.map(t => t.term);
+        const groupTermSet = new Set(groupTermStrs);
+        const leftoverTerms = simpleTerms.filter(t => !groupTermSet.has(t.term));
+        
+        const remainders = groupTermObjs.map(termObj => {
+            const termLiterals = new Set(termObj.term.match(/[A-F]'?/g) || []);
+            const prefixLiterals = new Set(bestFactor.prefix.match(/[A-F]'?/g) || []);
+            const remainderLiterals = [...termLiterals].filter(lit => !prefixLiterals.has(lit));
+            return {
+                term: remainderLiterals.length > 0 ? remainderLiterals.sort().join('') : '1',
+                color: termObj.color
             };
-            
-            const bestOfLeftovers = findBestFactoring(leftoverTerms);
-            const currentPathTerms = [newFactoredTerm, ...bestOfLeftovers];
-            const currentPathLiterals = countLiteralsInExpression(currentPathTerms.map(t => t.term));
-            if (currentPathLiterals < bestOutcome.literals) {
-                bestOutcome = {
-                    terms: currentPathTerms,
-                    literals: currentPathLiterals,
-                };
+        });
+
+        // Modificação: Apenas agrupa, não simplifica internamente aqui.
+        const remaindersStr = remainders.map(r => r.term).join(' + ');
+        const newFactoredTermStr = `${bestFactor.prefix}(${remaindersStr})`;
+        
+        const newFactoredTerm = { term: newFactoredTermStr, color: groupTermObjs[0].color };
+        const finalTerms = [newFactoredTerm, ...leftoverTerms, ...complexTerms];
+
+        const explanation = `O fator comum <strong>${bestFactor.prefix}</strong> foi colocado em evidência nos termos <strong>${groupTermStrs.join(', ')}</strong>, resultando em uma nova expressão agrupada.`;
+
+        return { newTerms: finalTerms, changed: true, explanation };
+    }
+
+    function processInnerSimplificationStep(termsWithMeta) {
+        const currentTerms = [...termsWithMeta];
+        for (let i = 0; i < currentTerms.length; i++) {
+            const termMeta = currentTerms[i];
+            const termStr = termMeta.term;
+
+            // Encontra termos com parênteses que não sejam de uma operação XOR/XNOR já simplificada
+            const match = termStr.match(/^(.*?)\((.*)\)$/);
+            if (match && !match[2].includes('⊕') && !match[2].includes('⊙')) {
+                const prefix = match[1];
+                const innerExpression = match[2];
+                
+                const innerTermStrings = innerExpression.split(' + ');
+                const innerTermObjects = innerTermStrings.map(t => ({ term: t, color: null }));
+                
+                // Roda a lógica de simplificação apenas na parte interna
+                const simplifiedInnerTerms = runInnerSimplification(innerTermObjects);
+                const simplifiedInnerStr = simplifiedInnerTerms.map(t => t.term).join(' + ');
+
+                // Verifica se houve alguma mudança
+                if (simplifiedInnerStr !== innerExpression) {
+                    let newTermStr;
+                    // Evita parênteses duplos, como em A((B ⊕ C))
+                    if (simplifiedInnerTerms.length === 1 && simplifiedInnerTerms[0].term.startsWith('(')) {
+                         newTermStr = `${prefix}${simplifiedInnerStr}`;
+                    } else {
+                         newTermStr = `${prefix}(${simplifiedInnerStr})`;
+                    }
+
+                    const newTermsList = [...currentTerms];
+                    newTermsList.splice(i, 1, { term: newTermStr, color: termMeta.color });
+
+                    const explanation = `A expressão interna <code>${innerExpression}</code> foi simplificada, resultando em <strong>${simplifiedInnerStr}</strong>.`;
+                    return { newTerms: newTermsList, changed: true, explanation };
+                }
             }
         }
-        return bestOutcome.terms;
+        return { changed: false };
     }
 
     function runInnerSimplification(terms) {
         let currentTerms = [...terms];
-        currentTerms = processXorSimplification(currentTerms);
         let changed = true;
-        while (changed) {
-            const result = processOneCompoundStep(currentTerms);
-            currentTerms = result.newTerms;
-            changed = result.changed;
+        // Este loop agora tentará todas as simplificações possíveis, incluindo a fatoração.
+        while(changed) {
+            let changedThisCycle = false;
+            
+            // Adicionado: Agora também tentamos fatorar os termos internos.
+            const factorResult = processOneFactoringStep(currentTerms);
+            if (factorResult.changed) {
+                currentTerms = factorResult.newTerms;
+                changedThisCycle = true;
+                continue;
+            }
+
+            const xorResult = processOneXorStep(currentTerms);
+            if (xorResult.changed) {
+                currentTerms = xorResult.newTerms;
+                changedThisCycle = true;
+                continue;
+            }
+
+            const compoundResult = processOneCompoundStep(currentTerms);
+            if (compoundResult.changed) {
+                currentTerms = compoundResult.newTerms;
+                changedThisCycle = true;
+                continue;
+            }
+
+            if(!changedThisCycle) {
+                changed = false;
+            }
         }
         return currentTerms;
     }
 
     function generatePotentialFactors(terms) {
+        const countLiterals = (str) => (str.match(/[A-F]/g) || []).length;
+
         const prefixMap = new Map();
         terms.forEach(termObj => {
             const prefixes = getPrefixes(termObj.term);
             prefixes.forEach(p => {
-                if (!prefixMap.has(p)) {
-                    prefixMap.set(p, []);
-                }
+                if (!prefixMap.has(p)) prefixMap.set(p, []);
                 prefixMap.get(p).push(termObj);
             });
         });
+        
         const potentialFactors = [];
         prefixMap.forEach((group, prefix) => {
             if (group.length > 1) {
-                potentialFactors.push({
-                    prefix: prefix,
-                    group: group,
-                    score: (group.length - 1) * (prefix.match(/[A-F]/g) || []).length - group.length
-                });
+                const score = (group.length - 1) * countLiterals(prefix);
+                potentialFactors.push({ prefix, group, score });
             }
         });
+
         return potentialFactors.sort((a, b) => b.score - a.score);
     }
 
     function getPrefixes(term) {
+        // Correção: Se o termo já for complexo (com parênteses), 
+        // não tente extrair prefixos dele. Retorne um array vazio.
+        if (term.includes('(') || term.includes(')')) {
+            return [];
+        }
+
         const literals = term.match(/[A-F]'?/g) || [];
         if (literals.length === 0) return [];
+        
         const prefixes = new Set();
         const n = literals.length;
         for (let i = 1; i < (1 << n); i++) {
@@ -542,44 +552,39 @@ document.addEventListener('DOMContentLoaded', () => {
         let count = 0;
         termStrings.forEach(str => {
             const literals = str.match(/[A-F]/g);
-            if (literals) {
-                count += literals.length;
-            }
+            if (literals) count += literals.length;
         });
         return count;
     }
     
-    /**
-     * Adicionado: Converte a notação (P ⊕ Q)' para P ⊙ Q para a exibição final.
-     */
     function formatWithXNOR(termStr) {
-        if (!termStr.endsWith(")'")) {
-            return termStr; // Não é uma expressão XNOR para converter
-        }
-
-        // Remove parênteses externos e apóstrofo final
-        let coreExpr = termStr.slice(1, -2); // (A ⊕ (B ⊕ C))' -> A ⊕ (B ⊕ C)
-
-        // Encontra o primeiro '⊕' de nível superior para substituir por '⊙'
+        if (!termStr.endsWith(")'")) return termStr;
+        let coreExpr = termStr.slice(1, -2);
         let balance = 0;
         for (let i = 0; i < coreExpr.length; i++) {
             const char = coreExpr[i];
-            if (char === '(') {
-                balance++;
-            } else if (char === ')') {
-                balance--;
-            } else if (char === '⊕' && balance === 0) {
-                // Encontrou o operador principal
+            if (char === '(') balance++;
+            else if (char === ')') balance--;
+            else if (char === '⊕' && balance === 0) {
                 const pTerm = coreExpr.substring(0, i).trim();
                 const qTerm = coreExpr.substring(i + 1).trim();
                 return `(${pTerm} ⊙ ${qTerm})`;
             }
         }
-        
-        // Fallback para casos simples como (A ⊕ B)'
-        return `(${coreExpr.replace(' ⊕ ', ' ⊙ ')})`;
+        return `(${coreExpr.replace(/\s*⊕\s*/, ' ⊙ ')})`;
     }
 
+    function showCopyFeedback(button, iconClass) {
+        const icon = button.querySelector('i');
+        icon.classList.remove(iconClass);
+        icon.classList.add('bi-clipboard-check');
+        button.style.color = 'green';
+        setTimeout(() => {
+            icon.classList.remove(bi-clipboard-check);
+            icon.classList.add(iconClass);
+            button.style.color = '';
+        }, 2000);
+    }
 
     // --- Configuração dos Eventos da Interface ---
 
@@ -587,12 +592,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDecrement.addEventListener('click', () => { let v = parseInt(numVariaveisInput.value); if (v > 2) { numVariaveisInput.value = v - 1; gerarTabelaVerdade(); } });
     btnGerarMapa.addEventListener('click', gerarMapaEExibir);
     btnVoltar.addEventListener('click', () => switchView(mainView));
-    btnCopiarExpressao.addEventListener('click', () => {
-        navigator.clipboard.writeText(expressionElement.textContent).then(() => {
-            const originalText = btnCopiarExpressao.textContent; btnCopiarExpressao.textContent = 'Copiado!';
-            setTimeout(() => { btnCopiarExpressao.textContent = originalText; }, 2000);
-        }).catch(err => { console.error('Falha ao copiar expressão:', err); alert('Não foi possível copiar.'); });
+    
+    btnCopyMainExpression.addEventListener('click', () => {
+        const textToCopy = expressionElement.textContent;
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showCopyFeedback(btnCopyMainExpression, 'bi-clipboard');
+        }).catch(err => console.error('Falha ao copiar expressão:', err));
     });
+
     btnSalvarJPG.addEventListener('click', () => {
         const areaParaCapturar = document.querySelector('.kmap-and-expression');
         html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
@@ -601,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let expr = expressionElement.textContent.substring(4).trim().replace(/[^a-zA-Z0-9-]/g, '');
             link.download = `mapa-${expr || 'simplificado'}.jpg`;
             link.click();
-        }).catch(err => { console.error('Erro ao salvar imagem:', err); alert('Ocorreu um erro ao salvar a imagem.'); });
+        }).catch(err => console.error('Erro ao salvar imagem:', err));
     });
 
     btnMostrarPassos.addEventListener('click', () => {
@@ -614,13 +621,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const useColors = (index === 0);
                 const expressionHTML = formatExpressionHTML(step.termsWithMeta, useColors);
-
+                const plainExpression = formatExpressionFromTerms(step.termsWithMeta);
+                
                 stepDiv.innerHTML = `
                     <div class="step-title">${step.title}</div>
                     <div class="step-explanation">${step.explanation}</div>
                     <div class="step-expression-container">
                         <div class="step-expression">${expressionHTML}</div>
-                        <button class="copy-step-btn" data-expression="${step.plainExpression}" title="Copiar expressão">
+                        <button class="copy-icon-button copy-step-btn" data-expression="${plainExpression}" title="Copiar Expressão do Passo">
                             <i class="bi bi-clipboard"></i>
                         </button>
                     </div>
@@ -629,9 +637,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             stepsContainer.style.display = 'block';
             btnMostrarPassos.textContent = 'Ocultar Passos';
+            btnCopySteps.style.display = 'inline-block';
         } else {
             stepsContainer.style.display = 'none';
             btnMostrarPassos.textContent = 'Mostrar Passos';
+            btnCopySteps.style.display = 'none';
         }
     });
 
@@ -640,19 +650,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (copyBtn) {
             const textToCopy = copyBtn.dataset.expression;
             navigator.clipboard.writeText(textToCopy).then(() => {
-                const icon = copyBtn.querySelector('i');
-                icon.classList.remove('bi-clipboard');
-                icon.classList.add('bi-clipboard-check');
-                copyBtn.style.color = 'green';
-                
-                setTimeout(() => {
-                    icon.classList.remove('bi-clipboard-check');
-                    icon.classList.add('bi-clipboard');
-                    copyBtn.style.color = '';
-                }, 2000);
-            }).catch(err => {
-                console.error('Falha ao copiar: ', err);
+                showCopyFeedback(copyBtn, 'bi-clipboard');
+            }).catch(err => console.error('Falha ao copiar: ', err));
+        }
+    });
+
+    btnCopySteps.addEventListener('click', () => {
+        const stepsContent = document.getElementById('simplification-steps-container');
+        const styles = `
+            <style>
+                body { font-family: sans-serif; color: #1e293b; }
+                .step { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
+                .step:last-child { border-bottom: none; }
+                .step-title { font-weight: 700; font-size: 1.2rem; color: #1e293b; margin-bottom: 0.5rem; }
+                .step-explanation { font-size: 1rem; color: #475569; margin-bottom: 1rem; line-height: 1.6; }
+                .step-expression-container { display: flex; align-items: center; background-color: #f1f5f9; padding: 0.75rem 1rem; border-radius: 0.5rem; }
+                .step-expression { font-family: monospace; font-size: 1.1rem; color: rgb(0, 60, 189); flex-grow: 1; }
+                .copy-icon-button { display: none; }
+                h2, p { margin: 0; }
+            </style>
+        `;
+        const htmlToCopy = `<!DOCTYPE html><html><head>${styles}</head><body><h2>Passos da Simplificação</h2>${stepsContent.innerHTML}</body></html>`;
+
+        try {
+            const blob = new Blob([htmlToCopy], { type: 'text/html' });
+            const clipboardItem = new ClipboardItem({ 'text/html': blob });
+            navigator.clipboard.write([clipboardItem]).then(() => {
+                const originalText = btnCopySteps.textContent;
+                btnCopySteps.textContent = 'Copiado!';
+                setTimeout(() => { btnCopySteps.textContent = originalText; }, 2000);
             });
+        } catch (e) {
+            console.error('Falha ao copiar conteúdo formatado:', e);
+            alert('Seu navegador não suporta a cópia de conteúdo formatado.');
         }
     });
 

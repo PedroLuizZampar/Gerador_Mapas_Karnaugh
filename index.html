@@ -45,20 +45,30 @@
         <div class="results-content">
             <div class="kmap-and-expression">
                 <div id="kmap-container">
-                    </div>
-
+                </div> 
+            </div>
+            
+            
+            <h2>Expressão Simplificada</h2>
+            <div id="main-expression-container">
                 <div id="expression-container">
-                    <h2>Expressão Simplificada</h2>
-                    <p id="simplified-expression">S = ?</p>
-                    
-                    <div id="simplification-steps-container" style="display: none;"></div>
+                    <div class="expression-wrapper">
+                        <p id="simplified-expression">S = ?</p>
+                    </div>
+                </div>
+                <div id="btn-copy-main-expression-container">
+                    <button id="btn-copy-main-expression" class="copy-icon-button" title="Copiar Expressão">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
                 </div>
             </div>
+
+            <div id="simplification-steps-container" style="display: none;"></div>
         </div>
         
         <div class="action-buttons">
             <button id="btn-mostrar-passos" class="btn-secondary">Mostrar Passos</button>
-            <button id="btn-copiar-expressao" class="btn-secondary">Copiar Expressão</button>
+            <button id="btn-copy-steps" class="btn-secondary" style="display: none;">Copiar Passos</button>
             <button id="btn-salvar-jpg" class="btn-secondary">Salvar como JPG</button>
         </div>
     </div>

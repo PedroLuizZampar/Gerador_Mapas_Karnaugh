@@ -244,7 +244,7 @@ tbody tr:hover {
     color: var(--white);
     font-size: 1.125rem;
     font-weight: 500;
-    padding: 0.875rem 2rem;
+    padding: 0.875rem 1.5rem;
     border: none;
     border-radius: 0.5rem;
     cursor: pointer;
@@ -254,7 +254,7 @@ tbody tr:hover {
 
 .btn-secondary:hover {
     background-color: #1d4ed8;
-    transform: translateY(-2px);
+    transform: translateY(-2px); /* Efeito sutil de elevação. */
 }
 
 /* Container que agrupa o mapa e a expressão resultante. */
@@ -335,17 +335,29 @@ tbody tr:hover {
     z-index: 10; /* Garante que o grupo fique sobre as células. */
 }
 
+#main-expression-container {
+    display: flex;
+}
+
 /* Container para a expressão booleana simplificada. */
 #expression-container {
-    margin-top: 1.25rem;
     padding: 1.25rem;
     background-color: var(--slate-100);
-    border-radius: var(--border-radius);
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
     text-align: center;
 }
 
-#expression-container h2 {
-    margin: 0 0 0.75rem 0;
+/* Container para o botão para copiar a expressão booleana simplificada. */
+#btn-copy-main-expression-container {
+    background-color: var(--slate-100);
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    text-align: center;
+    display: flex;
+    align-items: center;
+}
+
+h2 {
+    margin: 0.5rem 0 0 0;
     color: var(--slate-800);
     font-size: 1.5rem;
 }
@@ -359,6 +371,7 @@ tbody tr:hover {
     min-height: 30px;
     letter-spacing: 1.5px;
     word-break: break-all;
+    margin: 0;
 }
 
 /* Container para os botões de ação na tela do mapa */
@@ -382,6 +395,8 @@ tbody tr:hover {
     max-width: 800px;
     margin-left: auto;
     margin-right: auto;
+    background-color: var(--white);
+    border-radius: var(--border-radius);
 }
 
 .step {
@@ -412,7 +427,7 @@ tbody tr:hover {
     display: flex;
     align-items: center;
     gap: 1rem;
-    background-color: var(--slate-200);
+    background-color: var(--slate-100);
     padding: 0.75rem 1rem;
     border-radius: 0.5rem;
 }
@@ -425,12 +440,13 @@ tbody tr:hover {
     flex-grow: 1; /* Faz a expressão ocupar o espaço disponível */
 }
 
-.copy-step-btn {
+/* Botão de Ícone para Copiar (usado na expressão principal e nos passos) */
+.copy-icon-button {
     background: none;
     border: none;
     cursor: pointer;
     color: var(--slate-600);
-    font-size: 1.25rem; /* Tamanho do ícone */
+    font-size: 1.5rem; /* Tamanho do ícone */
     padding: 0.5rem;
     border-radius: 50%;
     display: flex;
@@ -439,6 +455,18 @@ tbody tr:hover {
     transition: background-color 0.2s, color 0.2s;
 }
 
-.copy-step-btn:hover {
-    background-color: var(--slate-300);
+#btn-copy-main-expression {
+    position: relative;
+}
+
+.copy-icon-button:hover {
+    background-color: var(--slate-200);
+}
+
+/* Novo Wrapper para a Expressão Principal */
+.expression-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
