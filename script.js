@@ -87,20 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     continue; 
                 }
 
-                // >>> Adicione a chamada para a nova função aqui <<<
-                const innerSimpResult = processInnerSimplificationStep(currentTerms);
-                if (innerSimpResult.changed) {
-                    simplificationStepsLog.push({
-                        title: `Passo ${stepCounter++}: Simplificação (Expressão Interna)`,
-                        termsWithMeta: innerSimpResult.newTerms,
-                        plainExpression: formatExpressionFromTerms(innerSimpResult.newTerms),
-                        explanation: innerSimpResult.explanation
-                    });
-                    currentTerms = innerSimpResult.newTerms;
-                    somethingChangedThisCycle = true;
-                    continue;
-                }
-
                 const xorResult = processOneXorStep(currentTerms);
                 if (xorResult.changed) {
                     simplificationStepsLog.push({
@@ -133,8 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             let finalDisplayTerms = [...currentTerms];
-            const needsXnorConversion = currentTerms.some(t => t.term.endsWith(")'"));
-
+            const needsXnorConversion = currentTerms.some(t => t.term.includes("⊕") && t.term.endsWith(")'"));
+            
             if (needsXnorConversion) {
                 finalDisplayTerms = currentTerms.map(t => ({...t, term: formatWithXNOR(t.term)}));
                 
@@ -322,26 +308,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return term;
         };
-        const checkPrefixInverse = (p1, p2) => {
-            const allVars = new Set([...Object.keys(p1), ...Object.keys(p2)]);
+        const checkPrefixInverse = (p1_vars, p2_vars) => {
+            const p1_keys = Object.keys(p1_vars);
+            const p2_keys = Object.keys(p2_vars);
+    
+            // Os prefixos devem ter o mesmo conjunto de variáveis para serem considerados inversos simples.
+            if (p1_keys.length !== p2_keys.length) return { isInverse: false };
+            const allVars = new Set([...p1_keys, ...p2_keys]);
+            if (allVars.size !== p1_keys.length) return { isInverse: false };
+    
             const commonPrefix = {};
             const diffVars = [];
+    
             for (const v of allVars) {
-                const s1 = p1[v];
-                const s2 = p2[v];
-                if (s1 !== undefined && s1 === s2) {
-                    commonPrefix[v] = s1;
-                } else if (s1 !== undefined && s2 !== undefined && s1 !== s2) {
-                    diffVars.push(v);
+                if (p1_vars[v] === p2_vars[v]) {
+                    commonPrefix[v] = p1_vars[v];
                 } else {
-                    return { isInverse: false };
+                    diffVars.push(v);
                 }
             }
+    
+            // Exatamente uma variável deve ser diferente.
             if (diffVars.length === 1) {
                 return { isInverse: true, diffVar: diffVars[0], commonPrefix };
             }
+    
             return { isInverse: false };
         };
+
         const currentTerms = [...termsWithMeta];
         for (let i = 0; i < currentTerms.length; i++) {
             for (let j = i + 1; j < currentTerms.length; j++) {
@@ -363,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const pTerm = diffVar;
                         const qVars = parsed1.xorPart.match(/[\w']+/g) || [];
-                        const allXorVars = [pTerm, ...qVars].sort((a,b) => a.replace("'", "").localeCompare(b.replace("'", "")));
+                        const allXorVars = [pTerm, ...qVars].sort((a,b) => a.localeCompare(b));
 
                         let newTermStr = `(${allXorVars.join(' ⊕ ')})`;
 
@@ -387,8 +381,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function processOneFactoringStep(termsWithMeta) {
-        const simpleTerms = termsWithMeta.filter(t => !t.term.includes('('));
-        const complexTerms = termsWithMeta.filter(t => t.term.includes('('));
+        const simpleTerms = termsWithMeta.filter(t => !t.term.includes('⊕') && !t.term.includes('('));
+        const complexTerms = termsWithMeta.filter(t => t.term.includes('⊕') || t.term.includes('('));
 
         if (simpleTerms.length < 2) return { changed: false };
         
@@ -413,66 +407,38 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         });
 
-        // Modificação: Apenas agrupa, não simplifica internamente aqui.
-        const remaindersStr = remainders.map(r => r.term).join(' + ');
-        const newFactoredTermStr = `${bestFactor.prefix}(${remaindersStr})`;
+        const initialRemaindersStr = remainders.map(r => r.term).join(' + ');
+        const simplifiedRemainders = runInnerSimplification(remainders);
+        const simplifiedRemaindersStr = simplifiedRemainders.map(t => t.term).join(' + ');
+        
+        let newFactoredTermStr;
+        const isSingleComplexTerm = simplifiedRemainders.length === 1 && simplifiedRemaindersStr.startsWith('(') && (simplifiedRemaindersStr.endsWith(')') || simplifiedRemaindersStr.endsWith(")'"));
+
+        if (isSingleComplexTerm) {
+            newFactoredTermStr = `${bestFactor.prefix}${simplifiedRemaindersStr}`;
+        } else {
+            newFactoredTermStr = `${bestFactor.prefix}(${simplifiedRemaindersStr})`;
+        }
         
         const newFactoredTerm = { term: newFactoredTermStr, color: groupTermObjs[0].color };
         const finalTerms = [newFactoredTerm, ...leftoverTerms, ...complexTerms];
 
-        const explanation = `O fator comum <strong>${bestFactor.prefix}</strong> foi colocado em evidência nos termos <strong>${groupTermStrs.join(', ')}</strong>, resultando em uma nova expressão agrupada.`;
+        let explanation = `O fator comum <strong>${bestFactor.prefix}</strong> foi colocado em evidência nos termos <strong>${groupTermStrs.join(', ')}</strong>.`;
+        if (initialRemaindersStr !== simplifiedRemaindersStr) {
+            explanation += ` A expressão interna resultante <code>${initialRemaindersStr}</code> foi subsequentemente simplificada para <code>${simplifiedRemaindersStr}</code>.`;
+        }
 
         return { newTerms: finalTerms, changed: true, explanation };
     }
 
-    function processInnerSimplificationStep(termsWithMeta) {
-        const currentTerms = [...termsWithMeta];
-        for (let i = 0; i < currentTerms.length; i++) {
-            const termMeta = currentTerms[i];
-            const termStr = termMeta.term;
-
-            // Encontra termos com parênteses que não sejam de uma operação XOR/XNOR já simplificada
-            const match = termStr.match(/^(.*?)\((.*)\)$/);
-            if (match && !match[2].includes('⊕') && !match[2].includes('⊙')) {
-                const prefix = match[1];
-                const innerExpression = match[2];
-                
-                const innerTermStrings = innerExpression.split(' + ');
-                const innerTermObjects = innerTermStrings.map(t => ({ term: t, color: null }));
-                
-                // Roda a lógica de simplificação apenas na parte interna
-                const simplifiedInnerTerms = runInnerSimplification(innerTermObjects);
-                const simplifiedInnerStr = simplifiedInnerTerms.map(t => t.term).join(' + ');
-
-                // Verifica se houve alguma mudança
-                if (simplifiedInnerStr !== innerExpression) {
-                    let newTermStr;
-                    // Evita parênteses duplos, como em A((B ⊕ C))
-                    if (simplifiedInnerTerms.length === 1 && simplifiedInnerTerms[0].term.startsWith('(')) {
-                         newTermStr = `${prefix}${simplifiedInnerStr}`;
-                    } else {
-                         newTermStr = `${prefix}(${simplifiedInnerStr})`;
-                    }
-
-                    const newTermsList = [...currentTerms];
-                    newTermsList.splice(i, 1, { term: newTermStr, color: termMeta.color });
-
-                    const explanation = `A expressão interna <code>${innerExpression}</code> foi simplificada, resultando em <strong>${simplifiedInnerStr}</strong>.`;
-                    return { newTerms: newTermsList, changed: true, explanation };
-                }
-            }
-        }
-        return { changed: false };
-    }
-
+    // --- INÍCIO DA CORREÇÃO ---
     function runInnerSimplification(terms) {
         let currentTerms = [...terms];
         let changed = true;
-        // Este loop agora tentará todas as simplificações possíveis, incluindo a fatoração.
         while(changed) {
             let changedThisCycle = false;
             
-            // Adicionado: Agora também tentamos fatorar os termos internos.
+            // Adiciona a tentativa de fatoração dentro do loop de simplificação interna
             const factorResult = processOneFactoringStep(currentTerms);
             if (factorResult.changed) {
                 currentTerms = factorResult.newTerms;
@@ -500,6 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return currentTerms;
     }
+    // --- FIM DA CORREÇÃO ---
 
     function generatePotentialFactors(terms) {
         const countLiterals = (str) => (str.match(/[A-F]/g) || []).length;
@@ -525,23 +492,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getPrefixes(term) {
-        // Correção: Se o termo já for complexo (com parênteses), 
-        // não tente extrair prefixos dele. Retorne um array vazio.
-        if (term.includes('(') || term.includes(')')) {
-            return [];
-        }
-
         const literals = term.match(/[A-F]'?/g) || [];
         if (literals.length === 0) return [];
-        
         const prefixes = new Set();
         const n = literals.length;
         for (let i = 1; i < (1 << n); i++) {
             const subset = [];
             for (let j = 0; j < n; j++) {
-                if ((i >> j) & 1) {
-                    subset.push(literals[j]);
-                }
+                if ((i >> j) & 1) subset.push(literals[j]);
             }
             prefixes.add(subset.sort().join(''));
         }
@@ -558,21 +516,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function formatWithXNOR(termStr) {
-        if (!termStr.endsWith(")'")) return termStr;
-        let coreExpr = termStr.slice(1, -2);
-        let balance = 0;
-        for (let i = 0; i < coreExpr.length; i++) {
-            const char = coreExpr[i];
-            if (char === '(') balance++;
-            else if (char === ')') balance--;
-            else if (char === '⊕' && balance === 0) {
-                const pTerm = coreExpr.substring(0, i).trim();
-                const qTerm = coreExpr.substring(i + 1).trim();
-                return `(${pTerm} ⊙ ${qTerm})`;
-            }
+        // Esta expressão regular identifica um prefixo (que pode ser vazio)
+        // seguido por uma expressão XNOR simples (ex: C ⊕ D) que precisa ser convertida.
+        const match = termStr.match(/^(.*)\(([^()]+⊕[^()]+)\)'$/);
+
+        if (match) {
+            const prefix = match[1]; // Captura o prefixo, ex: "A'B'"
+            const xorPart = match[2];  // Captura a parte interna, ex: "C ⊕ D"
+            
+            // Substitui apenas na parte interna e reconstrói a string
+            const xnorPart = xorPart.replace('⊕', '⊙');
+            return `${prefix}(${xnorPart})`;
         }
-        return `(${coreExpr.replace(/\s*⊕\s*/, ' ⊙ ')})`;
+    
+        // Se não corresponder ao padrão esperado, retorna a string original para evitar corrompê-la.
+        return termStr;
     }
+
 
     function showCopyFeedback(button, iconClass) {
         const icon = button.querySelector('i');
@@ -580,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.classList.add('bi-clipboard-check');
         button.style.color = 'green';
         setTimeout(() => {
-            icon.classList.remove(bi-clipboard-check);
+            icon.classList.remove('bi-clipboard-check');
             icon.classList.add(iconClass);
             button.style.color = '';
         }, 2000);
