@@ -1,452 +1,362 @@
-/* Define um esquema de cores e variáveis globais para consistência no design. */
+/* --- PASSO 1: VARIÁVEIS GLOBAIS E ESTILOS DE BASE --- */
+
+/*
+ * Explicação: Refinamos a paleta de cores para um visual mais coeso e profissional.
+ * O azul principal está um pouco mais escuro e o vermelho foi substituído por um tom de
+ * destaque mais sóbrio para os cabeçalhos do mapa, evitando a conotação de erro.
+ */
 :root {
-    /* Paleta de cores principais */
-    --blue-900:rgb(0, 60, 189);
-    --blue-600: #2563eb;
+    /* Paleta de cores refinada */
+    --blue-900: #0c4a6e;  /* Azul escuro para texto importante */
+    --blue-600: #2563eb;  /* Azul principal para botões e interações */
     --blue-500: #3b82f6;
     --blue-100: #dbeafe;
-    --slate-800: #1e293b;
-    --slate-600: #475569;
-    --slate-300: #cbd5e1;
-    --slate-200: #e2e8f0;
-    --slate-100: #f1f5f9;
+    --slate-900: #0f172a; /* Cor de cabeçalho principal */
+    --slate-800: #1e293b; /* Cor de corpo de texto */
+    --slate-600: #475569; /* Cor de texto secundário */
+    --slate-300: #cbd5e1; /* Bordas suaves */
+    --slate-200: #e2e8f0; /* Fundo de elementos "hover" */
+    --slate-100: #f1f5f9; /* Fundo de seções */
     --white: #ffffff;
-    --red: #dc2626;
-    --orange: #f97316;
+    --kmap-header-color: #4338ca; /* Roxo/Índigo para cabeçalhos do mapa */
+    --orange: #ec7723; /* Mantido para o "Don't Care" */
     
-    /* Variáveis para sombras, fontes e bordas */
+    /* Variáveis de design */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     --font-sans: 'Inter', sans-serif;
     --font-mono: 'Roboto Mono', monospace;
-    --border-radius: 0.75rem; /* 12px */
+    --border-radius-lg: 1rem; /* 16px */
+    --border-radius-md: 0.5rem; /* 8px */
 }
 
-/* Estilo base para a página, aplicando a fonte e o fundo padrão. */
+/*
+ * Explicação: Um fundo ligeiramente mais escuro e uma transição global
+ * tornam a experiência mais suave e agradável.
+ */
 body {
     font-family: var(--font-sans);
-    background-color: var(--slate-100);
+    background-color: var(--slate-200); /* Fundo um pouco mais escuro */
     color: var(--slate-800);
     margin: 0;
     padding: 2rem;
-    display: flex; /* Centraliza o conteúdo principal na página. */
+    display: flex;
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
+    transition: all 0.3s ease; /* Transição suave para todas as propriedades */
 }
 
-h3 {
-    display: flex;
-    padding: 10px;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.4rem;
-    font-family: var(--font-mono);
-    color: var(--red);
-    font-weight: bold;
-}
+/* --- PASSO 2: ESTILOS DO CONTAINER PRINCIPAL E CABEÇALHO --- */
 
-/* Container principal que engloba cada "tela" da aplicação (tabela e mapa). */
 .view-container {
     width: 95%;
-    max-width: 1200px;
+    max-width: 1400px; /* Aumenta a largura máxima para o novo layout */
     background-color: var(--white);
     padding: 2.5rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--border-radius-lg);
     box-shadow: var(--shadow-lg);
     text-align: center;
     transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
 }
 
-/*
- * Controla a visibilidade das telas. A tela que não estiver com a classe '.active'
- * fica invisível, fora da tela e não interativa. Isso permite a transição suave
- * entre a tabela verdade e o mapa.
- */
 .view-container:not(.active) {
     opacity: 0;
     transform: scale(0.98);
     visibility: hidden;
-    position: absolute; /* Remove o elemento do fluxo normal do layout. */
+    position: absolute;
     z-index: -1;
 }
 
-/* Estilos para o cabeçalho principal da aplicação. */
-header {
-    margin-bottom: 2rem;
-}
-
 header h1 {
-    color: var(--slate-800);
+    color: var(--slate-900); /* Cor de título mais escura */
     font-weight: 700;
-    font-size: 2.25rem;
-    margin: 0;
+    font-size: 2rem; /* Levemente ajustado */
+    padding-left: 1rem;
 }
 
 header p {
-    font-weight: 400;
-    font-size: 1.125rem;
+    font-size: 1.1rem;
     color: var(--slate-600);
-    max-width: 600px;
-    margin: 0 auto 2.5rem auto; /* Centraliza o parágrafo. */
+    max-width: 650px;
+    margin: 0 auto 2.5rem auto;
 }
 
-/* Seção de entrada para selecionar o número de variáveis. */
+/* --- PASSO 3: ESTILOS DOS INPUTS E TABELA --- */
+
+#num-variaveis {
+    font-size: 1.2rem;
+    color: var(--slate-600);
+    font-weight: 500;
+    margin-right: 0.5rem; /* Espaço entre o label e o stepper */
+}
+
 .input-section {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 1rem;
+    gap: 1.5rem; /* Mais espaçamento */
     margin-bottom: 2.5rem;
+    flex-wrap: wrap; /* Permite quebrar linha em telas menores */
 }
 
-.input-section label {
-    font-size: 1.125rem;
-    font-weight: 500;
-}
-
-/* Componente "stepper" para aumentar/diminuir o número de variáveis. */
 .stepper {
+    /* Estilos do stepper permanecem os mesmos */
     display: flex;
     align-items: center;
     border: 1px solid var(--slate-300);
-    border-radius: 0.5rem;
-    overflow: hidden; /* Garante que os cantos arredondados sejam aplicados. */
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
 }
-
-.stepper input[type="number"] {
-    width: 60px;
-    height: 45px;
-    text-align: center;
-    font-size: 1.25rem;
-    font-weight: 700;
-    border: none;
-    color: var(--blue-600);
-    background-color: transparent;
-    -moz-appearance: textfield; /* Remove os botões de spin padrão no Firefox. */
-    appearance: textfield; /* Evita um alerta do VS Code */
-}
-
-.stepper input::-webkit-inner-spin-button {
-    -webkit-appearance: none; /* Remove os botões de spin padrão no Chrome/Safari. */
-    margin: 0;
-}
-
-.stepper button {
-    width: 45px;
-    height: 45px;
-    border: none;
-    background-color: transparent;
-    font-size: 1.75rem;
-    font-weight: 400;
-    color: var(--blue-500);
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.stepper button:hover {
-    background-color: var(--blue-100);
-}
-
+.stepper input[type="number"] { width: 60px; height: 45px; text-align: center; font-size: 1.25rem; font-weight: 700; border: none; color: var(--blue-600); background-color: transparent; appearance: textfield; -moz-appearance: textfield; }
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper button { width: 45px; height: 45px; border: none; background-color: transparent; font-size: 1.75rem; font-weight: 400; color: var(--blue-500); cursor: pointer; transition: background-color 0.2s; }
+.stepper button:hover { background-color: var(--blue-100); }
 .stepper button:first-child { border-right: 1px solid var(--slate-300); }
 .stepper button:last-child { border-left: 1px solid var(--slate-300); }
 
-/* Container da tabela verdade, permite rolagem horizontal em telas pequenas. */
 #tabela-container {
     overflow-x: auto;
-    display: flex;
-    justify-content: center;
     padding-bottom: 1rem;
 }
 
-/* Estilo geral da tabela verdade. */
 table {
     border-collapse: collapse;
-    box-shadow: var(--shadow-md);
-    border-radius: var(--border-radius);
-    overflow: hidden; /* Essencial para que a borda arredondada funcione. */
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
     font-size: 1rem;
-    flex-shrink: 0; /* Impede que a tabela encolha quando o espaço é limitado. */
+    width: 100%; /* Faz a tabela ocupar o espaço disponível */
+    max-width: 800px; /* Limita a largura máxima */
+    margin: 0 auto; /* Centraliza a tabela */
+    border: 1px solid var(--slate-300); /* Borda sutil */
+    box-shadow: none; /* Remove a sombra, já que o card pai tem a sua */
+}
+
+thead th {
+    background-color: var(--slate-600); /* Fundo mais suave */
+    color: var(--white);
+    font-weight: 600; /* Um pouco mais de peso */
+    border-bottom: 2px solid var(--slate-300);
 }
 
 th, td {
-    padding: 0.75rem 1rem;
+    width: 1rem;
+    padding: 0.8rem 1rem;
     text-align: center;
     border: 1px solid var(--slate-200);
 }
 
-thead th {
-    width: 75px;
-    background-color: var(--slate-800);
-    color: var(--white);
-    font-weight: 500;
-}
+tbody tr:nth-child(even) { background-color: transparent; }
+tbody tr:nth-child(odd) { background-color: var(--slate-100); }
+tbody tr:hover { background-color: var(--blue-100); }
 
-/* Estilo "zebrado" para melhorar a legibilidade das linhas. */
-tbody tr:nth-child(even) {
-    background-color: var(--slate-100);
-}
-
-tbody tr:hover {
-    background-color: var(--blue-100);
-}
-
-/* Célula de saída da tabela (S), que é clicável. */
 .output-cell {
     cursor: pointer;
     font-weight: 700;
-    color: var(--slate-800);
-    user-select: none; /* Impede a seleção de texto ao clicar. */
+    user-select: none;
     transition: background-color 0.2s;
-    font-weight: bold;
+}
+.output-cell.x-value { color: var(--orange); }
+.output-cell.one-value { color: var(--blue-900); }
+
+/* --- PASSO 4: ESTILOS DOS BOTÕES --- */
+
+.btn-primary, .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
 }
 
-/* Estilo específico para o valor "Don't Care" (X). */
-.output-cell.x-value {
-    color: var(--orange);
-}
-
-.output-cell.one-value {
-    color: var(--blue-900);
-}
-
-/* Estilo para botões de ação principal, como "Gerar Mapa". */
-.btn-primary {
+.btn-primary, .btn-secondary, #btn-voltar {
     background-color: var(--blue-600);
     color: var(--white);
-    font-size: 1.125rem;
-    font-weight: 500;
-    padding: 0.875rem 2rem;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    transition: background-color 0.2s, transform 0.2s;
     box-shadow: var(--shadow-sm);
 }
-
-.btn-primary:hover {
+.btn-primary:hover, .btn-secondary:hover, #btn-voltar:hover {
     background-color: #1d4ed8;
-    transform: translateY(-2px); /* Efeito sutil de elevação. */
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
 }
 
-/* Estilos específicos para a tela do Mapa de Karnaugh. */
+#btn-voltar {
+    width: 0.2rem;
+    height: 2.3rem;
+    font-size: 1.5rem;
+    border-radius: 2rem;
+    padding: 0 1.1rem 0 1.1rem;
+}
+
+/* --- PASSO 5: LAYOUT DA TELA DE RESULTADOS (A GRANDE MUDANÇA) --- */
+
 .map-header {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 2rem; /* Adiciona espaço abaixo do cabeçalho */
+}
+
+/*
+ * Explicação: Aqui usamos Flexbox para criar o layout de duas colunas.
+ * Em telas menores (abaixo de 1024px), ele se torna uma única coluna.
+ */
+.results-wrapper {
+    display: flex;
+    flex-direction: row;
+    gap: 2.5rem;
+}
+
+.results-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+#map-column {
+    flex: 1 1 50%; /* Ocupa 50% do espaço, mas pode encolher/crescer */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza o mapa e o botão */
+}
+
+#expression-column {
+    flex: 1 1 50%;
+    text-align: left;
+}
+
+/* Media Query para responsividade */
+@media (max-width: 1024px) {
+    .results-wrapper {
+        flex-direction: column;
+    }
+}
+
+/* --- PASSO 6: ESTILOS DO MAPA DE KARNAUGH --- */
+
+#kmap-container { /* Sem muitas mudanças, já está bom */
+    display: flex;
+    justify-content: center;
     align-items: center;
     width: 100%;
 }
-
-/* Botão secundário, como "Voltar". */
-.btn-secondary {
-    background-color: var(--blue-600);
-    color: var(--white);
-    font-size: 1.125rem;
-    font-weight: 500;
-    padding: 0.875rem 1.5rem;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    transition: background-color 0.2s, transform 0.2s;
-    box-shadow: var(--shadow-sm);
-}
-
-.btn-secondary:hover {
-    background-color: #1d4ed8;
-    transform: translateY(-2px); /* Efeito sutil de elevação. */
-}
-
-/* Container que agrupa o mapa e a expressão resultante. */
-.results-content {
-    display: flex;
-    flex-direction: column; /* Organiza os itens verticalmente */
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-.kmap-and-expression {
-    display: block
-}
-
-#kmap-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.kmap-sub-grid-container {
-    position: relative; /* Contexto de posicionamento para os grupos. */
-}
-
-/* Grid principal que forma o Mapa de Karnaugh. */
 .kmap {
-    display: grid;
     font-family: var(--font-mono);
-    color: var(--red);
+    color: var(--kmap-header-color);
     font-weight: bold;
     margin: 15px;
 }
-
-/* Células individuais do mapa. */
 .kmap-cell {
-    width: 110px;
-    height: 110px;
+    width: 60px; /* Reduz o tamanho da célula para mapas maiores caberem melhor */
+    height: 60px;
     display: flex;
     justify-content: center;
     align-items: center;
     border: 1px solid var(--slate-800);
     box-sizing: border-box;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     color: var(--slate-800);
 }
-
-.kmap-cell.x-value {
-    color: var(--orange);
-}
-
-.kmap-cell.one-value {
-    color: var(--blue-900);
-}
-
-/* Cabeçalhos de variáveis ao redor do mapa. */
+.kmap-cell.x-value { color: var(--orange); }
+.kmap-cell.one-value { color: var(--blue-900); }
 .kmap-header {
-    display: flex;
-    padding: 10px;
+    padding: 5px;
     justify-content: center;
     align-items: center;
-    font-size: 1.4rem;
+    font-size: 1.1rem;
     font-family: var(--font-mono);
-    color: var(--red);
+    color: var(--kmap-header-color);
     font-weight: bold;
 }
-
-/*
- * Estilo do retângulo que visualiza um grupo simplificado.
- */
 .kmap-group {
-    border: solid; /* A cor é definida dinamicamente via JS. */
-    border-radius: 15px;
+    border: solid;
+    border-radius: 12px;
     box-sizing: border-box;
-    pointer-events: none; /* Permite cliques "através" do grupo. */
+    pointer-events: none;
     opacity: 0.8;
-    z-index: 10; /* Garante que o grupo fique sobre as células. */
+    z-index: 10;
 }
 
-#main-expression-container {
-    display: flex;
-}
+/* --- PASSO 7: NOVOS CARDS PARA EXPRESSÃO E PASSOS --- */
 
-/* Container para a expressão booleana simplificada. */
-#expression-container {
-    padding: 1.25rem;
+.expression-card, .steps-card {
     background-color: var(--slate-100);
-    border-radius: var(--border-radius) 0 0 var(--border-radius);
-    text-align: center;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    border: 1px solid var(--slate-200);
 }
 
-/* Container para o botão para copiar a expressão booleana simplificada. */
-#btn-copy-main-expression-container {
-    background-color: var(--slate-100);
-    border-radius: 0 var(--border-radius) var(--border-radius) 0;
-    text-align: center;
+.expression-card h2, .steps-card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    color: var(--slate-900);
+    border-bottom: 1px solid var(--slate-300);
+    padding-bottom: 0.75rem;
+}
+
+.expression-content {
     display: flex;
     align-items: center;
-}
-
-h2 {
-    margin: 0.5rem 0 0 0;
-    color: var(--slate-800);
-    font-size: 1.5rem;
-}
-
-/* Estilo do texto da expressão final. */
-#simplified-expression {
+    justify-content: space-between;
+    gap: 1rem;
     font-family: var(--font-mono);
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 500;
-    color: var(--blue-600);
-    min-height: 30px;
-    letter-spacing: 1.5px;
+    color: var(--blue-900);
+    background-color: var(--white);
+    padding: 1rem;
+    border-radius: var(--border-radius-md);
+}
+
+#simplified-expression {
     word-break: break-all;
     margin: 0;
 }
 
-/* Container para os botões de ação na tela do mapa */
-.action-buttons {
-    display: flex;
-    gap: 1rem; /* Espaçamento entre os botões */
-    justify-content: center;
-    width: 100%; /* Ocupa toda a largura para centralizar o conteúdo */
-    margin-top: 1.5rem; /* Espaçamento acima dos botões */
-    flex-wrap: wrap; /* Permite que os botões quebrem a linha em telas menores */
-}
-
-
-/* --- NOVOS ESTILOS PARA O PASSO A PASSO --- */
+/* --- PASSO 8: ESTILOS FINAIS PARA OS PASSOS E BOTÕES DE AÇÃO --- */
 
 #simplification-steps-container {
-    margin-top: 2rem;
-    padding: 1.5rem;
-    border-top: 2px solid var(--slate-200);
+    margin-top: 0; /* Removido pois o card pai já tem padding */
+    padding: 0;
+    border-top: none;
     text-align: left;
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
-    background-color: var(--white);
-    border-radius: var(--border-radius);
+    background-color: transparent;
+    border-radius: 0;
 }
 
 .step {
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--slate-200);
 }
-.step:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
+.step:last-child { border-bottom: none; margin-bottom: 0; }
 
-.step-title {
-    font-weight: 700;
-    font-size: 1.2rem;
-    color: var(--slate-800);
-    margin-bottom: 0.5rem;
-}
+.step-title { font-size: 1rem; font-weight: 600; }
+.step-explanation { font-size: 0.95rem; }
+.step-expression { font-size: 1rem; }
 
-.step-explanation {
-    font-size: 1rem;
-    color: var(--slate-600);
-    margin-bottom: 1rem;
-    line-height: 1.6;
-}
-
-.step-expression-container {
+.action-buttons {
     display: flex;
-    align-items: center;
     gap: 1rem;
-    background-color: var(--slate-100);
-    padding: 0.75rem 1rem;
-    border-radius: 0.5rem;
+    justify-content: center;
+    width: 100%;
+}
+.steps-action {
+    justify-content: flex-end; /* Alinha o botão de copiar passos à direita */
 }
 
-.step-expression {
-    font-family: var(--font-mono);
-    word-break: break-all;
-    font-size: 1.1rem;
-    color: var(--blue-900);
-    flex-grow: 1; /* Faz a expressão ocupar o espaço disponível */
-}
-
-/* Botão de Ícone para Copiar (usado na expressão principal e nos passos) */
 .copy-icon-button {
     background: none;
     border: none;
     cursor: pointer;
     color: var(--slate-600);
-    font-size: 1.5rem; /* Tamanho do ícone */
+    font-size: 1.5rem;
     padding: 0.5rem;
     border-radius: 50%;
     display: flex;
@@ -455,18 +365,56 @@ h2 {
     transition: background-color 0.2s, color 0.2s;
 }
 
-#btn-copy-main-expression {
-    position: relative;
-}
-
 .copy-icon-button:hover {
     background-color: var(--slate-200);
 }
 
-/* Novo Wrapper para a Expressão Principal */
-.expression-wrapper {
+/* --- PASSO 9: ESTILOS MELHORADOS PARA O PASSO-A-PASSO --- */
+
+.step {
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--slate-300);
+}
+.step:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.step-title {
+    font-size: 1.1rem; /* Mais destaque para o título do passo */
+    font-weight: 700;
+    color: var(--slate-800);
+}
+
+.step-explanation {
+    font-size: 1rem;
+    color: var(--slate-600);
+    margin-top: 0.25rem;
+}
+
+.step-result-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--slate-600);
+}
+
+/* Ajustes no container da expressão final para consistência */
+.step-expression-container {
     display: flex;
     align-items: center;
-    justify-content: center;
+    background-color: var(--white);
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius-md);
+    margin-top: 0.5rem;
+}
+
+.step-expression {
+    font-family: var(--font-mono);
+    font-size: 1.2rem;
+    color: var(--blue-900);
+    flex-grow: 1;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
 }

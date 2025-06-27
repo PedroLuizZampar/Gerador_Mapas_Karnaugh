@@ -11,8 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnGerarMapa = document.getElementById('btn-gerar-mapa');
     const btnVoltar = document.getElementById('btn-voltar');
     const btnCopyMainExpression = document.getElementById('btn-copy-main-expression');
-    const btnSalvarJPG = document.getElementById('btn-salvar-jpg');
-    const btnMostrarPassos = document.getElementById('btn-mostrar-passos');
+    const btnCopyMap = document.getElementById('btn-copiar-mapa');
+    // const btnMostrarPassos = document.getElementById('btn-mostrar-passos'); // Removido
     const btnCopySteps = document.getElementById('btn-copy-steps');
     const stepsContainer = document.getElementById('simplification-steps-container');
 
@@ -30,11 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const gerarMapaEExibir = () => {
+        // Reseta o estado da visualização de resultados
         simplificationStepsLog = [];
         stepsContainer.style.display = 'none';
         btnCopySteps.style.display = 'none';
         stepsContainer.innerHTML = '';
-        btnMostrarPassos.textContent = 'Mostrar Passos';
 
         const numVariaveis = parseInt(numVariaveisInput.value);
         const truthTableValues = lerValoresTabela();
@@ -47,16 +47,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             expressionElement.innerHTML = 'S = ?';
             btnCopyMainExpression.style.display = 'none';
-
+            
+            // Lida com casos simples onde a saída é sempre 0 ou 1
             if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
                 expressionElement.innerHTML = 'S = ' + (expression || '0');
-                btnMostrarPassos.style.display = 'none';
                 desenharGrupos(finalGroups || [], gridConfig);
+                renderizarPassos(); // Chamada para garantir que a área de passos fique oculta
                 switchView(mapView);
                 return;
             }
-            btnMostrarPassos.style.display = 'inline-block';
             
+            // --- Lógica de simplificação e registro de passos (inalterada) ---
             let stepCounter = 0;
             let currentTerms = finalGroups.map((group, i) => ({
                 term: getTermForGroup(numVariaveis, group),
@@ -67,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 title: `Passo ${stepCounter++}: Expressão Inicial (Soma de Produtos)`,
                 termsWithMeta: [...currentTerms],
                 plainExpression: formatExpressionFromTerms(currentTerms),
-                explanation: 'Esta é a expressão booleana simplificada, obtida diretamente dos agrupamentos no mapa (usando o método de Quine-McCluskey). As cores correspondem aos grupos. A partir daqui, aplicaremos regras algébricas para simplificar ainda mais.'
+                explanation: 'Esta é a expressão booleana simplificada, obtida diretamente dos agrupamentos no mapa. As cores correspondem aos grupos. A partir daqui, aplicaremos regras algébricas para simplificar ainda mais.'
             });
 
             let changedInLoop = true;
@@ -131,10 +132,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     explanation: "Para uma representação final mais limpa, convertemos a notação XNOR da forma (P ⊕ Q)' para a forma P ⊙ Q."
                 });
             }
-
+            // --- Fim da lógica de simplificação ---
+            
+            // Atualiza a interface com os resultados finais
             expressionElement.innerHTML = 'S = ' + formatExpressionHTML(finalDisplayTerms, false);
             btnCopyMainExpression.style.display = 'inline-flex';
             desenharGrupos(finalGroups, gridConfig);
+            
+            // **NOVO**: Renderiza os passos automaticamente
+            renderizarPassos();
 
         } catch (e) {
             console.error("Erro durante a simplificação:", e);
@@ -144,13 +150,49 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView(mapView);
     };
     
+    // **NOVO**: Função dedicada para renderizar os passos
+    function renderizarPassos() {
+        // Se não houver passos para mostrar, garante que os contêineres fiquem ocultos
+        if (simplificationStepsLog.length === 0) {
+            stepsContainer.style.display = 'none';
+            btnCopySteps.style.display = 'none';
+            return;
+        }
+
+        stepsContainer.innerHTML = ''; // Limpa os passos antigos
+        simplificationStepsLog.forEach((step, index) => {
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'step';
+            
+            const useColors = (index === 0);
+            const expressionHTML = formatExpressionHTML(step.termsWithMeta, useColors);
+            const plainExpression = formatExpressionFromTerms(step.termsWithMeta);
+            
+            stepDiv.innerHTML = `
+                <div class="step-title">${step.title}</div>
+                <div class="step-explanation">${step.explanation}</div>
+                <div class="step-expression-container">
+                    <div class="step-expression">${expressionHTML}</div>
+                    <button class="copy-icon-button copy-step-btn" data-expression="${plainExpression}" title="Copiar Expressão do Passo">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+            `;
+            stepsContainer.appendChild(stepDiv);
+        });
+
+        // Exibe o contêiner de passos e o botão de copiar
+        stepsContainer.style.display = 'block';
+        btnCopySteps.style.display = 'inline-block';
+    }
+
     function formatExpressionHTML(terms, useColors = true) {
         const termStrings = terms.map(meta => {
             const termText = meta.term.replace(/'/g, '’');
             if (useColors && meta.color) {
                 return `<span style="color: ${meta.color}; font-weight: 700;">${termText}</span>`;
             }
-            return `<span style="font-weight: 700;">${termText}</span>`;
+            return `<span style="font-weight: 500;">${termText}</span>`;
         });
         return termStrings.join(' + ');
     }
@@ -186,7 +228,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if(varsLeft.length>0){const mainVar=varsLeft[0];const labels=[`${mainVar}'`,mainVar];const rowSpan=gridConfig.rows/labels.length;labels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${headerRows+1+i*rowSpan} / 1 / ${headerRows+1+(i*rowSpan+rowSpan)} / 2`;kmap.appendChild(h)})}
     if(hasSplitLeft){const subVar=varsLeft[1];const subLabels=[`${subVar}'`,subVar,subVar,`${subVar}'`];const rightHeaderColStart=leftHeaderCols+gridConfig.cols+1;subLabels.forEach((label,r)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${headerRows+1+r} / ${rightHeaderColStart} / ${headerRows+2+r} / ${rightHeaderColStart+1}`;kmap.appendChild(h)})}
     matrix.forEach((rowData,r)=>{rowData.forEach((cellData,c)=>{const cell=document.createElement("div");cell.className="kmap-cell";if(cellData==="X")cell.classList.add("x-value");if(cellData==="1")cell.classList.add("one-value");cell.textContent=cellData;cell.style.gridArea=`${headerRows+1+r} / ${leftHeaderCols+1+c} / ${headerRows+2+r} / ${leftHeaderCols+2+c}`;kmap.appendChild(cell)})});mapContainer.appendChild(kmap);return mapContainer};if(numVars<=4){mainWrapper.appendChild(buildMapGrid(kmapMatrices[0],0,gridConfig))}else if(numVars===5){mainWrapper.style.display="flex";mainWrapper.style.alignItems="center";mainWrapper.style.gap="20px";const divA0=document.createElement("div");const divA1=document.createElement("div");divA0.innerHTML=`<h3>${gridConfig.varsSub[0]}'</h3>`;divA1.innerHTML=`<h3>${gridConfig.varsSub[0]}</h3>`;divA0.appendChild(buildMapGrid(kmapMatrices[0],0,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));divA1.appendChild(buildMapGrid(kmapMatrices[1],1,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));mainWrapper.append(divA0,divA1)}else if(numVars===6){mainWrapper.style.display="grid";mainWrapper.style.gridTemplateColumns="auto auto auto";mainWrapper.style.gridTemplateRows="auto auto auto";mainWrapper.style.gap="5px 15px";mainWrapper.style.alignItems="center";mainWrapper.style.justifyItems="center";const mainGridVarV=gridConfig.varsSub[0];const mainGridVarH=gridConfig.varsSub[1];const corner=document.createElement("div");corner.style.gridArea="1 / 1";mainWrapper.appendChild(corner);const topLabels=[`${mainGridVarH}'`,mainGridVarH];topLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`1 / ${2+i}`;mainWrapper.appendChild(h)});const leftLabels=[`${mainGridVarV}'`,mainGridVarV];leftLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.padding="10px";h.style.gridArea=`${2+i} / 1`;mainWrapper.appendChild(h)});const subGridConfig={varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop};const placement={"0":"2 / 2","1":"2 / 3","3":"3 / 2","2":"3 / 3"};kmapMatrices.forEach((matrix,index)=>{const map=buildMapGrid(matrix,index,subGridConfig);map.style.gridArea=placement[index];mainWrapper.appendChild(map)})}}
-    function desenharGrupos(groups,gridConfig){document.querySelectorAll(".kmap-group").forEach(el=>el.remove());const{rows,cols}=gridConfig;const BORDER_WIDTH=4;const drawRect=(rect,color,groupIndex)=>{const kmapGrid=document.getElementById(`kmap-grid-${rect.grid}`);if(!kmapGrid)return;const numVariaveis=parseInt(numVariaveisInput.value);const subGridConfig=numVariaveis<=4?gridConfig:{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop};const leftHeaderCols=subGridConfig.varsLeft.length>0?1:0;const topHeaderRows=subGridConfig.varsTop.length>0?1:0;const groupDiv=document.createElement("div");groupDiv.className="kmap-group";groupDiv.style.borderColor=color;groupDiv.style.margin=`${groupIndex*BORDER_WIDTH}px`;groupDiv.style.borderWidth=`${BORDER_WIDTH}px`;groupDiv.style.gridArea=`${topHeaderRows+rect.r+1} / ${leftHeaderCols+rect.c+1} / ${topHeaderRows+rect.r+1+rect.h} / ${leftHeaderCols+rect.c+1+rect.w}`;kmapGrid.appendChild(groupDiv)};groups.forEach((group,i)=>{const color=GROUP_COLORS[i%GROUP_COLORS.length];const numVars=parseInt(numVariaveisInput.value);const groupPos=group.map(ttIndex=>ttIndexToKmapPos(ttIndex,numVars));const groupCellsByGrid={};groupPos.forEach(pos=>{if(!groupCellsByGrid[pos.grid])groupCellsByGrid[pos.grid]=[];groupCellsByGrid[pos.grid].push(pos)});for(const grid in groupCellsByGrid){const rects=findRectanglesForDrawing(groupCellsByGrid[grid],rows,cols);rects.forEach(r=>drawRect({...r,grid:parseInt(grid)},color,i))}})}
+    function desenharGrupos(groups, gridConfig) {
+        // Remove todos os elementos de grupo existentes
+        document.querySelectorAll(".kmap-group").forEach(el => el.remove());
+
+        const { rows, cols } = gridConfig;
+        const BORDER_WIDTH = 3;
+
+        // Função auxiliar para desenhar um retângulo de grupo no mapa de Karnaugh
+        const drawRect = (rect, color, groupIndex) => {
+            const kmapGrid = document.getElementById(`kmap-grid-${rect.grid}`);
+            if (!kmapGrid) return;
+
+            const numVariaveis = parseInt(numVariaveisInput.value);
+            const subGridConfig = numVariaveis <= 4
+                ? gridConfig
+                : { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop };
+
+            const leftHeaderCols = subGridConfig.varsLeft.length > 0 ? 1 : 0;
+            const topHeaderRows = subGridConfig.varsTop.length > 0 ? 1 : 0;
+
+            const groupDiv = document.createElement("div");
+            groupDiv.className = "kmap-group";
+            groupDiv.style.borderColor = color;
+            if (groupIndex > 5) {
+                groupIndex = 1; // Limita o índice do grupo para evitar muitos deslocamentos
+            }
+            groupDiv.style.margin = `${groupIndex * BORDER_WIDTH}px`
+            groupDiv.style.borderWidth = `${BORDER_WIDTH}px`;
+            groupDiv.style.gridArea = `${topHeaderRows + rect.r + 1} / ${leftHeaderCols + rect.c + 1} / ${topHeaderRows + rect.r + 1 + rect.h} / ${leftHeaderCols + rect.c + 1 + rect.w}`;
+            kmapGrid.appendChild(groupDiv);
+        };
+
+        // Para cada grupo, determina as posições no mapa e desenha os retângulos correspondentes
+        groups.forEach((group, i) => {
+            const color = GROUP_COLORS[i % GROUP_COLORS.length];
+            const numVars = parseInt(numVariaveisInput.value);
+
+            // Converte os índices da tabela verdade para posições no mapa de Karnaugh
+            const groupPos = group.map(ttIndex => ttIndexToKmapPos(ttIndex, numVars));
+
+            // Agrupa as posições por sub-grade (para mapas de 5 ou 6 variáveis)
+            const groupCellsByGrid = {};
+            groupPos.forEach(pos => {
+                if (!groupCellsByGrid[pos.grid]) groupCellsByGrid[pos.grid] = [];
+                groupCellsByGrid[pos.grid].push(pos);
+            });
+
+            // Para cada sub-grade, encontra os retângulos e desenha-os
+            for (const grid in groupCellsByGrid) {
+                const rects = findRectanglesForDrawing(groupCellsByGrid[grid], rows, cols);
+                rects.forEach(r => drawRect({ ...r, grid: parseInt(grid) }, color, i));
+            }
+        });
+    }
+
     function findRectanglesForDrawing(cells,maxRow,maxCol){if(cells.length===0)return[];const visited=new Set;const rectangles=[];const cellSet=new Set(cells.map(c=>`${c.row}-${c.col}`));cells.sort((a,b)=>a.row-b.row||a.col-b.col);cells.forEach(startCell=>{const key=`${startCell.row}-${startCell.col}`;if(visited.has(key))return;const possibleSizes=[{w:4,h:4},{w:4,h:2},{w:2,h:4},{w:4,h:1},{w:1,h:4},{w:2,h:2},{w:2,h:1},{w:1,h:2},{w:1,h:1}];for(const size of possibleSizes){if(canFormRectangle(startCell,size,cellSet,maxRow,maxCol,visited)){const rect=createRectangle(startCell,size,maxRow,maxCol,visited);rectangles.push(...rect);break}}});return rectangles}
     function canFormRectangle(startCell,size,cellSet,maxRow,maxCol,visited){for(let r=0;r<size.h;r++){for(let c=0;c<size.w;c++){const row=(startCell.row+r)%maxRow;const col=(startCell.col+c)%maxCol;if(!cellSet.has(`${row}-${col}`)||visited.has(`${row}-${col}`))return false}}return true}
     function createRectangle(startCell,size,maxRow,maxCol,visited){const rectangles=[];for(let r=0;r<size.h;r++){for(let c=0;c<size.w;c++)visited.add(`${(startCell.row+r)%maxRow}-${(startCell.col+c)%maxCol}`)}
@@ -312,7 +408,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const p1_keys = Object.keys(p1_vars);
             const p2_keys = Object.keys(p2_vars);
     
-            // Os prefixos devem ter o mesmo conjunto de variáveis para serem considerados inversos simples.
             if (p1_keys.length !== p2_keys.length) return { isInverse: false };
             const allVars = new Set([...p1_keys, ...p2_keys]);
             if (allVars.size !== p1_keys.length) return { isInverse: false };
@@ -328,7 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
     
-            // Exatamente uma variável deve ser diferente.
             if (diffVars.length === 1) {
                 return { isInverse: true, diffVar: diffVars[0], commonPrefix };
             }
@@ -425,20 +519,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let explanation = `O fator comum <strong>${bestFactor.prefix}</strong> foi colocado em evidência nos termos <strong>${groupTermStrs.join(', ')}</strong>.`;
         if (initialRemaindersStr !== simplifiedRemaindersStr) {
-            explanation += ` A expressão interna resultante <code>${initialRemaindersStr}</code> foi subsequentemente simplificada para <code>${simplifiedRemaindersStr}</code>.`;
+            explanation += ` A expressão interna resultante <strong>${initialRemaindersStr}</strong> foi subsequentemente simplificada para <strong>${simplifiedRemaindersStr}</strong>.`;
         }
 
         return { newTerms: finalTerms, changed: true, explanation };
     }
 
-    // --- INÍCIO DA CORREÇÃO ---
     function runInnerSimplification(terms) {
         let currentTerms = [...terms];
         let changed = true;
         while(changed) {
             let changedThisCycle = false;
             
-            // Adiciona a tentativa de fatoração dentro do loop de simplificação interna
             const factorResult = processOneFactoringStep(currentTerms);
             if (factorResult.changed) {
                 currentTerms = factorResult.newTerms;
@@ -466,7 +558,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return currentTerms;
     }
-    // --- FIM DA CORREÇÃO ---
 
     function generatePotentialFactors(terms) {
         const countLiterals = (str) => (str.match(/[A-F]/g) || []).length;
@@ -516,23 +607,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function formatWithXNOR(termStr) {
-        // Esta expressão regular identifica um prefixo (que pode ser vazio)
-        // seguido por uma expressão XNOR simples (ex: C ⊕ D) que precisa ser convertida.
         const match = termStr.match(/^(.*)\(([^()]+⊕[^()]+)\)'$/);
 
         if (match) {
-            const prefix = match[1]; // Captura o prefixo, ex: "A'B'"
-            const xorPart = match[2];  // Captura a parte interna, ex: "C ⊕ D"
+            const prefix = match[1];
+            const xorPart = match[2];
             
-            // Substitui apenas na parte interna e reconstrói a string
             const xnorPart = xorPart.replace('⊕', '⊙');
             return `${prefix}(${xnorPart})`;
         }
     
-        // Se não corresponder ao padrão esperado, retorna a string original para evitar corrompê-la.
         return termStr;
     }
-
 
     function showCopyFeedback(button, iconClass) {
         const icon = button.querySelector('i');
@@ -543,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
             icon.classList.remove('bi-clipboard-check');
             icon.classList.add(iconClass);
             button.style.color = '';
-        }, 2000);
+        }, 1500);
     }
 
     // --- Configuração dos Eventos da Interface ---
@@ -560,50 +646,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error('Falha ao copiar expressão:', err));
     });
 
-    btnSalvarJPG.addEventListener('click', () => {
+    btnCopyMap.addEventListener('click', () => {
         const areaParaCapturar = document.querySelector('.kmap-and-expression');
         html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/jpeg', 0.9);
-            let expr = expressionElement.textContent.substring(4).trim().replace(/[^a-zA-Z0-9-]/g, '');
-            link.download = `mapa-${expr || 'simplificado'}.jpg`;
-            link.click();
-        }).catch(err => console.error('Erro ao salvar imagem:', err));
+            canvas.toBlob(blob => {
+                if (blob && navigator.clipboard && window.ClipboardItem) {
+                    const originalText = btnCopyMap.textContent;
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    navigator.clipboard.write([item]).then(() => {
+                        btnCopyMap.textContent = 'Copiado!';
+                        setTimeout(() => { btnCopyMap.textContent = originalText; }, 1500);
+                    }).catch(err => {
+                        console.error('Erro ao copiar imagem:', err);
+                        alert('Falha ao copiar imagem para a área de transferência.');
+                    });
+                } else {
+                    alert('Seu navegador não suporta copiar imagens para a área de transferência.');
+                }
+            }, 'image/png');
+        }).catch(err => console.error('Erro ao copiar imagem:', err));
     });
 
-    btnMostrarPassos.addEventListener('click', () => {
-        const isHidden = stepsContainer.style.display === 'none';
-        if (isHidden) {
-            stepsContainer.innerHTML = '';
-            simplificationStepsLog.forEach((step, index) => {
-                const stepDiv = document.createElement('div');
-                stepDiv.className = 'step';
-                
-                const useColors = (index === 0);
-                const expressionHTML = formatExpressionHTML(step.termsWithMeta, useColors);
-                const plainExpression = formatExpressionFromTerms(step.termsWithMeta);
-                
-                stepDiv.innerHTML = `
-                    <div class="step-title">${step.title}</div>
-                    <div class="step-explanation">${step.explanation}</div>
-                    <div class="step-expression-container">
-                        <div class="step-expression">${expressionHTML}</div>
-                        <button class="copy-icon-button copy-step-btn" data-expression="${plainExpression}" title="Copiar Expressão do Passo">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
-                    </div>
-                `;
-                stepsContainer.appendChild(stepDiv);
-            });
-            stepsContainer.style.display = 'block';
-            btnMostrarPassos.textContent = 'Ocultar Passos';
-            btnCopySteps.style.display = 'inline-block';
-        } else {
-            stepsContainer.style.display = 'none';
-            btnMostrarPassos.textContent = 'Mostrar Passos';
-            btnCopySteps.style.display = 'none';
-        }
-    });
+    // **REMOVIDO**: Evento de clique para o botão "Mostrar Passos"
+    // btnMostrarPassos.addEventListener('click', () => { ... });
 
     stepsContainer.addEventListener('click', (event) => {
         const copyBtn = event.target.closest('.copy-step-btn');
@@ -622,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body { font-family: sans-serif; color: #1e293b; }
                 .step { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
                 .step:last-child { border-bottom: none; }
-                .step-title { font-weight: 700; font-size: 1.2rem; color: #1e293b; margin-bottom: 0.5rem; }
+                .step-title { font-weight: 500; font-size: 1.2rem; color: #1e293b; margin-bottom: 0.5rem; }
                 .step-explanation { font-size: 1rem; color: #475569; margin-bottom: 1rem; line-height: 1.6; }
                 .step-expression-container { display: flex; align-items: center; background-color: #f1f5f9; padding: 0.75rem 1rem; border-radius: 0.5rem; }
                 .step-expression { font-family: monospace; font-size: 1.1rem; color: rgb(0, 60, 189); flex-grow: 1; }
@@ -638,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navigator.clipboard.write([clipboardItem]).then(() => {
                 const originalText = btnCopySteps.textContent;
                 btnCopySteps.textContent = 'Copiado!';
-                setTimeout(() => { btnCopySteps.textContent = originalText; }, 2000);
+                setTimeout(() => { btnCopySteps.textContent = originalText; }, 1500);
             });
         } catch (e) {
             console.error('Falha ao copiar conteúdo formatado:', e);
