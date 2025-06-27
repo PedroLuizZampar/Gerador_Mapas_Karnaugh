@@ -647,24 +647,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnCopyMap.addEventListener('click', () => {
+        const originalText = btnCopyMap.textContent;
+        btnCopyMap.disabled = true; // Desativa o botão imediatamente
+
         const areaParaCapturar = document.querySelector('.kmap-and-expression');
         html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
             canvas.toBlob(blob => {
                 if (blob && navigator.clipboard && window.ClipboardItem) {
-                    const originalText = btnCopyMap.textContent;
                     const item = new ClipboardItem({ 'image/png': blob });
                     navigator.clipboard.write([item]).then(() => {
                         btnCopyMap.textContent = 'Copiado!';
-                        setTimeout(() => { btnCopyMap.textContent = originalText; }, 1500);
+                        setTimeout(() => { 
+                            btnCopyMap.textContent = originalText; 
+                            btnCopyMap.disabled = false; // Reativa o botão no final
+                        }, 1500);
                     }).catch(err => {
                         console.error('Erro ao copiar imagem:', err);
                         alert('Falha ao copiar imagem para a área de transferência.');
+                        btnCopyMap.textContent = originalText;
+                        btnCopyMap.disabled = false; // Reativa o botão em caso de erro
                     });
                 } else {
                     alert('Seu navegador não suporta copiar imagens para a área de transferência.');
+                    btnCopyMap.textContent = originalText;
+                    btnCopyMap.disabled = false; // Reativa o botão em caso de erro
                 }
             }, 'image/png');
-        }).catch(err => console.error('Erro ao copiar imagem:', err));
+        }).catch(err => {
+            console.error('Erro ao renderizar imagem:', err);
+            btnCopyMap.textContent = originalText;
+            btnCopyMap.disabled = false; // Reativa o botão em caso de erro
+        });
     });
 
     // **REMOVIDO**: Evento de clique para o botão "Mostrar Passos"
@@ -681,6 +694,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnCopySteps.addEventListener('click', () => {
+        const originalText = btnCopySteps.textContent;
+        btnCopySteps.disabled = true; // Desativa o botão imediatamente
+        
         const stepsContent = document.getElementById('simplification-steps-container');
         const styles = `
             <style>
@@ -701,13 +717,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const blob = new Blob([htmlToCopy], { type: 'text/html' });
             const clipboardItem = new ClipboardItem({ 'text/html': blob });
             navigator.clipboard.write([clipboardItem]).then(() => {
-                const originalText = btnCopySteps.textContent;
                 btnCopySteps.textContent = 'Copiado!';
-                setTimeout(() => { btnCopySteps.textContent = originalText; }, 1500);
+                setTimeout(() => { 
+                    btnCopySteps.textContent = originalText; 
+                    btnCopySteps.disabled = false; // Reativa o botão no final
+                }, 1500);
+            }).catch(err => {
+                console.error('Falha ao copiar conteúdo formatado:', err);
+                alert('Falha ao copiar os passos.');
+                btnCopySteps.textContent = originalText;
+                btnCopySteps.disabled = false; // Reativa o botão em caso de erro
             });
         } catch (e) {
-            console.error('Falha ao copiar conteúdo formatado:', e);
+            console.error('Falha ao criar blob para cópia:', e);
             alert('Seu navegador não suporta a cópia de conteúdo formatado.');
+            btnCopySteps.textContent = originalText;
+            btnCopySteps.disabled = false; // Reativa o botão em caso de erro
         }
     });
 
