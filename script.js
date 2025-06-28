@@ -12,15 +12,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnVoltar = document.getElementById('btn-voltar');
     const btnCopyMainExpression = document.getElementById('btn-copy-main-expression');
     const btnCopyMap = document.getElementById('btn-copiar-mapa');
-    // const btnMostrarPassos = document.getElementById('btn-mostrar-passos'); // Removido
+    const btnCopiarTabela = document.getElementById('btn-copiar-tabela');
     const btnCopySteps = document.getElementById('btn-copy-steps');
     const stepsContainer = document.getElementById('simplification-steps-container');
 
     // Define constantes e variáveis globais.
     const estadosSaida = ['0', '1', 'X'];
-    const VAR_NAMES = ['A', 'B', 'C', 'D', 'E', 'F'];
+    let varNames = ['A', 'B', 'C', 'D', 'E', 'F']; 
+    let outputVarName = 'S'; // NOVO: Variável para o nome da saída, permitindo que seja editável.
     const GROUP_COLORS = ['#f44336', '#2196f3', '#4caf50', '#ffc107', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722'];
     let simplificationStepsLog = [];
+
+    /**
+     * NOVO: Converte os dígitos de uma string para seus equivalentes em subscrito (Unicode).
+     * @param {string} name - O nome da variável a ser formatado.
+     * @returns {string} - O nome com os números em formato subscrito.
+     */
+    function formatNameToSubscript(name) {
+        const subscriptDigits = {
+            '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+            '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
+        };
+        // Usa uma expressão regular para encontrar todos os dígitos na string e substituí-los.
+        return String(name).replace(/\d/g, digit => subscriptDigits[digit] || digit);
+    }
 
     const switchView = (viewToShow) => {
         document.querySelectorAll('.view-container').forEach(view => {
@@ -30,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const gerarMapaEExibir = () => {
-        // Reseta o estado da visualização de resultados
         simplificationStepsLog = [];
         stepsContainer.style.display = 'none';
         btnCopySteps.style.display = 'none';
@@ -45,19 +59,18 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { finalGroups, expression } = simplificar(numVariaveis, kmapMatrices);
 
-            expressionElement.innerHTML = 'S = ?';
+            // MODIFICADO: Usa a variável 'outputVarName' para o nome da saída.
+            expressionElement.innerHTML = `${outputVarName} = ?`;
             btnCopyMainExpression.style.display = 'none';
             
-            // Lida com casos simples onde a saída é sempre 0 ou 1
             if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
-                expressionElement.innerHTML = 'S = ' + (expression || '0');
+                expressionElement.innerHTML = `${outputVarName} = ${expression || '0'}`;
                 desenharGrupos(finalGroups || [], gridConfig);
-                renderizarPassos(); // Chamada para garantir que a área de passos fique oculta
+                renderizarPassos();
                 switchView(mapView);
                 return;
             }
             
-            // --- Lógica de simplificação e registro de passos (inalterada) ---
             let stepCounter = 0;
             let currentTerms = finalGroups.map((group, i) => ({
                 term: getTermForGroup(numVariaveis, group),
@@ -100,6 +113,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     somethingChangedThisCycle = true;
                     continue;
                 }
+
+                // ===== INÍCIO DA MODIFICAÇÃO =====
+                const complexFactorResult = processFactoringWithComplexTerms(currentTerms);
+                if (complexFactorResult.changed) {
+                    simplificationStepsLog.push({
+                        title: `Passo ${stepCounter++}: Fatoração (Termo Complexo)`,
+                        termsWithMeta: complexFactorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(complexFactorResult.newTerms),
+                        explanation: complexFactorResult.explanation
+                    });
+                    currentTerms = complexFactorResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
+                }
+                // ===== FIM DA MODIFICAÇÃO =====
                 
                 const compoundResult = processOneCompoundStep(currentTerms);
                 if (compoundResult.changed) {
@@ -120,9 +148,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             let finalDisplayTerms = [...currentTerms];
-            const needsXnorConversion = currentTerms.some(t => t.term.includes("⊕") && t.term.endsWith(")'"));
+            
+            // MODIFICADO: A condição agora verifica de forma mais robusta se existe
+            // um padrão XNOR (um XOR negado) em qualquer parte do termo.
+            const needsXnorConversion = currentTerms.some(t => t.term.includes("⊕") && t.term.includes(")'"));
             
             if (needsXnorConversion) {
+                // A nova função formatWithXNOR é chamada aqui e irá converter todas as ocorrências.
                 finalDisplayTerms = currentTerms.map(t => ({...t, term: formatWithXNOR(t.term)}));
                 
                 simplificationStepsLog.push({
@@ -132,34 +164,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     explanation: "Para uma representação final mais limpa, convertemos a notação XNOR da forma (P ⊕ Q)' para a forma P ⊙ Q."
                 });
             }
-            // --- Fim da lógica de simplificação ---
             
-            // Atualiza a interface com os resultados finais
-            expressionElement.innerHTML = 'S = ' + formatExpressionHTML(finalDisplayTerms, false);
+            // MODIFICADO: Usa a variável 'outputVarName' para o nome da saída.
+            expressionElement.innerHTML = `${outputVarName} = ${formatExpressionHTML(finalDisplayTerms, false)}`;
             btnCopyMainExpression.style.display = 'inline-flex';
             desenharGrupos(finalGroups, gridConfig);
             
-            // **NOVO**: Renderiza os passos automaticamente
             renderizarPassos();
 
         } catch (e) {
             console.error("Erro durante a simplificação:", e);
-            expressionElement.textContent = "S = Erro na simplificação";
+            expressionElement.textContent = `${outputVarName} = Erro na simplificação`;
         }
         
         switchView(mapView);
     };
     
-    // **NOVO**: Função dedicada para renderizar os passos
     function renderizarPassos() {
-        // Se não houver passos para mostrar, garante que os contêineres fiquem ocultos
         if (simplificationStepsLog.length === 0) {
             stepsContainer.style.display = 'none';
             btnCopySteps.style.display = 'none';
             return;
         }
 
-        stepsContainer.innerHTML = ''; // Limpa os passos antigos
+        stepsContainer.innerHTML = '';
         simplificationStepsLog.forEach((step, index) => {
             const stepDiv = document.createElement('div');
             stepDiv.className = 'step';
@@ -181,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
             stepsContainer.appendChild(stepDiv);
         });
 
-        // Exibe o contêiner de passos e o botão de copiar
         stepsContainer.style.display = 'block';
         btnCopySteps.style.display = 'inline-block';
     }
@@ -197,29 +224,116 @@ document.addEventListener('DOMContentLoaded', () => {
         return termStrings.join(' + ');
     }
 
+    // MODIFICADO: Usa a variável 'outputVarName' para o nome da saída.
     function formatExpressionFromTerms(terms) {
         const termStrings = terms.map(t => t.term);
-        return 'S = ' + termStrings.join(' + ');
+        return `${outputVarName} = ${termStrings.join(' + ')}`;
     }
     
-    function gerarTabelaVerdade(){const numVars=parseInt(numVariaveisInput.value);tabelaContainer.innerHTML="";const numLinhas=Math.pow(2,numVars);const table=document.createElement("table");table.innerHTML=`
+    // MODIFICADO: A função agora adiciona o ícone de edição para a variável de saída 'S' e a lógica de edição foi aprimorada.
+    function gerarTabelaVerdade() {
+        const numVars = parseInt(numVariaveisInput.value);
+        tabelaContainer.innerHTML = "";
+        const numLinhas = Math.pow(2, numVars);
+
+        const tableHeaders = varNames.slice(0, numVars).map((v, i) => `
+            <th>
+                <span class="variable-name" data-index="${i}">${v}</span>
+                <i class="bi bi-pencil-square edit-icon" data-index="${i}" title="Editar nome da variável"></i>
+            </th>
+        `).join("");
+
+        // NOVO: Cabeçalho para a variável de saída, agora com ícone de edição.
+        const outputHeader = `
+            <th>
+                <span class="variable-name" data-index="output">${outputVarName}</span>
+                <i class="bi bi-pencil-square edit-icon" data-index="output" title="Editar nome da variável de saída"></i>
+            </th>
+        `;
+
+        const table = document.createElement("table");
+        table.innerHTML = `
             <thead>
                 <tr>
-                    ${VAR_NAMES.slice(0,numVars).map(v=>`<th>${v}</th>`).join("")}
-                    <th>S</th>
+                    ${tableHeaders}
+                    ${outputHeader}
                 </tr>
             </thead>
             <tbody>
-                ${Array.from({length:numLinhas},(_,i)=>`
+                ${Array.from({length: numLinhas}, (_, i) => `
                     <tr>
-                        ${i.toString(2).padStart(numVars,"0").split("").map(bit=>`<td>${bit}</td>`).join("")}
+                        ${i.toString(2).padStart(numVars, "0").split("").map(bit => `<td>${bit}</td>`).join("")}
                         <td class="output-cell" data-current-state="0">0</td>
                     </tr>
                 `).join("")}
             </tbody>
-        `;table.querySelectorAll(".output-cell").forEach(cell=>{cell.addEventListener("click",()=>{let currentStateIndex=(parseInt(cell.dataset.currentState)+1)%estadosSaida.length;cell.textContent=estadosSaida[currentStateIndex];cell.dataset.currentState=currentStateIndex;cell.classList.toggle("x-value",cell.textContent==="X");cell.classList.toggle("one-value",cell.textContent==="1")})});tabelaContainer.appendChild(table)}
+        `;
+
+        table.querySelectorAll(".output-cell").forEach(cell => {
+            cell.addEventListener("click", () => {
+                let currentStateIndex = (parseInt(cell.dataset.currentState) + 1) % estadosSaida.length;
+                cell.textContent = estadosSaida[currentStateIndex];
+                cell.dataset.currentState = currentStateIndex;
+                cell.classList.toggle("x-value", cell.textContent === "X");
+                cell.classList.toggle("one-value", cell.textContent === "1");
+            });
+        });
+
+        // MODIFICADO: O listener agora trata a edição das variáveis de entrada e da variável de saída.
+        table.querySelector('thead').addEventListener('click', (event) => {
+            if (event.target.classList.contains('edit-icon')) {
+                const index = event.target.dataset.index;
+                const span = event.target.previousElementSibling;
+
+                if (index === 'output') {
+                    // Lógica para editar a variável de saída
+                    const oldName = outputVarName;
+                    const newName = prompt(`Editar nome da variável de saída "${oldName}":`, oldName);
+                    if (newName && newName.trim() && newName.trim() !== oldName) {
+                        // MODIFICADO: Aplica a formatação de subscrito antes de salvar e exibir.
+                        const plainName = newName.trim().substring(0, 10);
+                        const finalName = formatNameToSubscript(plainName);
+
+                        outputVarName = finalName;
+                        span.textContent = finalName;
+
+                        // Atualiza a expressão simplificada se já estiver visível
+                        if (mapView.classList.contains('active')) {
+                            const currentExpression = expressionElement.innerHTML.split('=')[1];
+                            expressionElement.innerHTML = `${outputVarName} =${currentExpression}`;
+                        }
+                    }
+                } else {
+                    // Lógica para editar as variáveis de entrada
+                    const numericIndex = parseInt(index);
+                    const oldName = varNames[numericIndex];
+                    const newName = prompt(`Editar nome da variável "${oldName}":`, oldName);
+                    if (newName && newName.trim() && newName.trim() !== oldName) {
+                        // MODIFICADO: Aplica a formatação de subscrito antes de salvar e exibir.
+                        const plainName = newName.trim().substring(0, 10);
+                        const finalName = formatNameToSubscript(plainName);
+
+                        varNames[numericIndex] = finalName;
+                        span.textContent = finalName;
+                    }
+                }
+            }
+        });
+
+        tabelaContainer.appendChild(table);
+    }
+
     function lerValoresTabela(){return Array.from(document.querySelectorAll(".output-cell")).map(cell=>cell.textContent)}
-    function getKmapGridConfig(numVars){if(numVars===2)return{rows:2,cols:2,numSubGrids:1,varsLeft:["A"],varsTop:["B"]};if(numVars===3)return{rows:2,cols:4,numSubGrids:1,varsLeft:["A"],varsTop:["B","C"]};if(numVars===4)return{rows:4,cols:4,numSubGrids:1,varsLeft:["A","B"],varsTop:["C","D"]};if(numVars===5)return{rows:4,cols:4,numSubGrids:2,varsSub:["A"],varsLeft:["B","C"],varsTop:["D","E"]};if(numVars===6)return{rows:4,cols:4,numSubGrids:4,varsSub:["A","B"],varsLeft:["C","D"],varsTop:["E","F"]};return{}}
+
+    function getKmapGridConfig(numVars) {
+        if (numVars === 2) return { rows: 2, cols: 2, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1]] };
+        if (numVars === 3) return { rows: 2, cols: 4, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1], varNames[2]] };
+        if (numVars === 4) return { rows: 4, cols: 4, numSubGrids: 1, varsLeft: [varNames[0], varNames[1]], varsTop: [varNames[2], varNames[3]] };
+        if (numVars === 5) return { rows: 4, cols: 4, numSubGrids: 2, varsSub: [varNames[0]], varsLeft: [varNames[1], varNames[2]], varsTop: [varNames[3], varNames[4]] };
+        if (numVars === 6) return { rows: 4, cols: 4, numSubGrids: 4, varsSub: [varNames[0], varNames[1]], varsLeft: [varNames[2], varNames[3]], varsTop: [varNames[4], varNames[5]] };
+        return {};
+    }
+
     function ttIndexToKmapPos(index,numVars){const bin=index.toString(2).padStart(numVars,"0");const grayCode=[0,1,3,2];let row,col,grid=0;switch(numVars){case 2:row=parseInt(bin[0],2);col=parseInt(bin[1],2);break;case 3:row=parseInt(bin[0],2);col=grayCode.indexOf(parseInt(bin.substring(1,3),2));break;case 4:row=grayCode.indexOf(parseInt(bin.substring(0,2),2));col=grayCode.indexOf(parseInt(bin.substring(2,4),2));break;case 5:grid=parseInt(bin[0],2);row=grayCode.indexOf(parseInt(bin.substring(1,3),2));col=grayCode.indexOf(parseInt(bin.substring(3,5),2));break;case 6:grid=grayCode.indexOf(parseInt(bin.substring(0,2),2));row=grayCode.indexOf(parseInt(bin.substring(2,4),2));col=grayCode.indexOf(parseInt(bin.substring(4,6),2));break}return{grid,row,col}}
     function kmapPosToTTIndex(pos,numVars){let bin="";const grayCode=[0,1,3,2];switch(numVars){case 2:bin=`${pos.row.toString(2)}${pos.col.toString(2)}`;break;case 3:bin=`${pos.row.toString(2)}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 4:bin=`${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 5:bin=`${pos.grid.toString(2)}${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break;case 6:bin=`${grayCode[pos.grid].toString(2).padStart(2,"0")}${grayCode[pos.row].toString(2).padStart(2,"0")}${grayCode[pos.col].toString(2).padStart(2,"0")}`;break}return parseInt(bin,2)}
     function gerarMatrizesKmap(numVars,values){const gridConfig=getKmapGridConfig(numVars);if(!gridConfig.rows)return{kmapMatrices:[],gridConfig:{}};const kmapMatrices=Array.from({length:gridConfig.numSubGrids},()=>Array(gridConfig.rows).fill(null).map(()=>Array(gridConfig.cols).fill(null)));values.forEach((val,index)=>{const pos=ttIndexToKmapPos(index,numVars);if(kmapMatrices[pos.grid]?.[pos.row]!==undefined){kmapMatrices[pos.grid][pos.row][pos.col]=val}});return{kmapMatrices,gridConfig}}
@@ -229,13 +343,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if(hasSplitLeft){const subVar=varsLeft[1];const subLabels=[`${subVar}'`,subVar,subVar,`${subVar}'`];const rightHeaderColStart=leftHeaderCols+gridConfig.cols+1;subLabels.forEach((label,r)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`${headerRows+1+r} / ${rightHeaderColStart} / ${headerRows+2+r} / ${rightHeaderColStart+1}`;kmap.appendChild(h)})}
     matrix.forEach((rowData,r)=>{rowData.forEach((cellData,c)=>{const cell=document.createElement("div");cell.className="kmap-cell";if(cellData==="X")cell.classList.add("x-value");if(cellData==="1")cell.classList.add("one-value");cell.textContent=cellData;cell.style.gridArea=`${headerRows+1+r} / ${leftHeaderCols+1+c} / ${headerRows+2+r} / ${leftHeaderCols+2+c}`;kmap.appendChild(cell)})});mapContainer.appendChild(kmap);return mapContainer};if(numVars<=4){mainWrapper.appendChild(buildMapGrid(kmapMatrices[0],0,gridConfig))}else if(numVars===5){mainWrapper.style.display="flex";mainWrapper.style.alignItems="center";mainWrapper.style.gap="20px";const divA0=document.createElement("div");const divA1=document.createElement("div");divA0.innerHTML=`<h3>${gridConfig.varsSub[0]}'</h3>`;divA1.innerHTML=`<h3>${gridConfig.varsSub[0]}</h3>`;divA0.appendChild(buildMapGrid(kmapMatrices[0],0,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));divA1.appendChild(buildMapGrid(kmapMatrices[1],1,{varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop}));mainWrapper.append(divA0,divA1)}else if(numVars===6){mainWrapper.style.display="grid";mainWrapper.style.gridTemplateColumns="auto auto auto";mainWrapper.style.gridTemplateRows="auto auto auto";mainWrapper.style.gap="5px 15px";mainWrapper.style.alignItems="center";mainWrapper.style.justifyItems="center";const mainGridVarV=gridConfig.varsSub[0];const mainGridVarH=gridConfig.varsSub[1];const corner=document.createElement("div");corner.style.gridArea="1 / 1";mainWrapper.appendChild(corner);const topLabels=[`${mainGridVarH}'`,mainGridVarH];topLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.gridArea=`1 / ${2+i}`;mainWrapper.appendChild(h)});const leftLabels=[`${mainGridVarV}'`,mainGridVarV];leftLabels.forEach((label,i)=>{const h=document.createElement("div");h.className="kmap-header";h.textContent=label;h.style.padding="10px";h.style.gridArea=`${2+i} / 1`;mainWrapper.appendChild(h)});const subGridConfig={varsLeft:gridConfig.varsLeft,varsTop:gridConfig.varsTop};const placement={"0":"2 / 2","1":"2 / 3","3":"3 / 2","2":"3 / 3"};kmapMatrices.forEach((matrix,index)=>{const map=buildMapGrid(matrix,index,subGridConfig);map.style.gridArea=placement[index];mainWrapper.appendChild(map)})}}
     function desenharGrupos(groups, gridConfig) {
-        // Remove todos os elementos de grupo existentes
         document.querySelectorAll(".kmap-group").forEach(el => el.remove());
 
         const { rows, cols } = gridConfig;
         const BORDER_WIDTH = 3;
 
-        // Função auxiliar para desenhar um retângulo de grupo no mapa de Karnaugh
         const drawRect = (rect, color, groupIndex) => {
             const kmapGrid = document.getElementById(`kmap-grid-${rect.grid}`);
             if (!kmapGrid) return;
@@ -252,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
             groupDiv.className = "kmap-group";
             groupDiv.style.borderColor = color;
             if (groupIndex > 5) {
-                groupIndex = 1; // Limita o índice do grupo para evitar muitos deslocamentos
+                groupIndex = 1; 
             }
             groupDiv.style.margin = `${groupIndex * BORDER_WIDTH}px`
             groupDiv.style.borderWidth = `${BORDER_WIDTH}px`;
@@ -260,22 +372,18 @@ document.addEventListener('DOMContentLoaded', () => {
             kmapGrid.appendChild(groupDiv);
         };
 
-        // Para cada grupo, determina as posições no mapa e desenha os retângulos correspondentes
         groups.forEach((group, i) => {
             const color = GROUP_COLORS[i % GROUP_COLORS.length];
             const numVars = parseInt(numVariaveisInput.value);
 
-            // Converte os índices da tabela verdade para posições no mapa de Karnaugh
             const groupPos = group.map(ttIndex => ttIndexToKmapPos(ttIndex, numVars));
 
-            // Agrupa as posições por sub-grade (para mapas de 5 ou 6 variáveis)
             const groupCellsByGrid = {};
             groupPos.forEach(pos => {
                 if (!groupCellsByGrid[pos.grid]) groupCellsByGrid[pos.grid] = [];
                 groupCellsByGrid[pos.grid].push(pos);
             });
 
-            // Para cada sub-grade, encontra os retângulos e desenha-os
             for (const grid in groupCellsByGrid) {
                 const rects = findRectanglesForDrawing(groupCellsByGrid[grid], rows, cols);
                 rects.forEach(r => drawRect({ ...r, grid: parseInt(grid) }, color, i));
@@ -298,16 +406,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectMinimalCover(primeImplicants,minterms){if(minterms.length===0)return[];const mintermSet=new Set(minterms);const coverage=new Map(minterms.map(mt=>[mt,[]]));primeImplicants.forEach((pi,index)=>pi.forEach(term=>{if(coverage.has(term))coverage.get(term).push(index)}));const finalGroups=[];const usedMinterms=new Set;const essentialPIs=new Set;coverage.forEach(piList=>{if(piList.length===1)essentialPIs.add(piList[0])});essentialPIs.forEach(piIndex=>{finalGroups.push(primeImplicants[piIndex]);primeImplicants[piIndex].forEach(term=>{if(mintermSet.has(term))usedMinterms.add(term)})});const uncoveredMinterms=new Set(minterms.filter(mt=>!usedMinterms.has(mt)));const remainingPIs=primeImplicants.filter((_,index)=>!essentialPIs.has(index));while(uncoveredMinterms.size>0){let bestPi=null,maxCovered=0,bestPiIndex=-1;remainingPIs.forEach((pi,index)=>{const coveredCount=pi.filter(term=>uncoveredMinterms.has(term)).length;if(coveredCount>maxCovered){maxCovered=coveredCount;bestPi=pi;bestPiIndex=index}
     else if(coveredCount>0&&coveredCount===maxCovered&&pi.length>(bestPi?.length||0)){bestPi=pi;bestPiIndex=index}});if(!bestPi)break;finalGroups.push(bestPi);bestPi.forEach(term=>uncoveredMinterms.delete(term));if(bestPiIndex>-1)remainingPIs.splice(bestPiIndex,1)}
     return finalGroups}
-    function getTermForGroup(numVars,group){if(group.length===Math.pow(2,numVars))return"1";let term="";const binaries=group.map(g=>g.toString(2).padStart(numVars,"0"));for(let i=0;i<numVars;i++){const firstBit=binaries[0][i];if(binaries.every(b=>b[i]===firstBit)){term+=VAR_NAMES[i];if(firstBit==="0")term+="'"}}
-    const termParts=term.match(/[A-F]'?/g);if(!termParts)return"";return termParts.sort((a,b)=>a.localeCompare(b)).join("")}
+
+    function getTermForGroup(numVars,group){
+        if(group.length===Math.pow(2,numVars))return"1";
+        let term="";
+        const binaries=group.map(g=>g.toString(2).padStart(numVars,"0"));
+        for(let i=0;i<numVars;i++){
+            const firstBit=binaries[0][i];
+            if(binaries.every(b=>b[i]===firstBit)){
+                term+=varNames[i];
+                if(firstBit==="0")term+="'"
+            }
+        }
+        const termParts=term.match(new RegExp(`(${varNames.join('|')})'?`, 'g')); 
+        if(!termParts)return"";
+        return termParts.sort((a,b)=>a.localeCompare(b)).join("")
+    }
 
     function processOneXorStep(termsWithMeta) {
         const parseTerm = (termStr) => {
             const vars = {};
             if (termStr === '1') return vars;
-            const parts = termStr.match(/[A-F]'?/g) || [];
+            const parts = termStr.match(new RegExp(`(${varNames.join('|')})'?`, 'g')) || [];
             parts.forEach(part => {
-                vars[part.charAt(0)] = !part.includes("'");
+                const varName = part.replace("'", "");
+                vars[varName] = !part.includes("'");
             });
             return vars;
         };
@@ -390,9 +513,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const parseTerm = (termStr) => {
             const vars = {};
             if (termStr === '1' || termStr === '') return vars;
-            const parts = termStr.match(/[A-F]'?/g) || [];
+            const parts = termStr.match(new RegExp(`(${varNames.join('|')})'?`, 'g')) || [];
             parts.forEach(part => {
-                vars[part.charAt(0)] = !part.includes("'");
+                const varName = part.replace("'", "");
+                vars[varName] = !part.includes("'");
             });
             return vars;
         };
@@ -492,8 +616,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const leftoverTerms = simpleTerms.filter(t => !groupTermSet.has(t.term));
         
         const remainders = groupTermObjs.map(termObj => {
-            const termLiterals = new Set(termObj.term.match(/[A-F]'?/g) || []);
-            const prefixLiterals = new Set(bestFactor.prefix.match(/[A-F]'?/g) || []);
+            const regex = new RegExp(`(${varNames.join('|')})'?`, 'g');
+            const termLiterals = new Set(termObj.term.match(regex) || []);
+            const prefixLiterals = new Set(bestFactor.prefix.match(regex) || []);
             const remainderLiterals = [...termLiterals].filter(lit => !prefixLiterals.has(lit));
             return {
                 term: remainderLiterals.length > 0 ? remainderLiterals.sort().join('') : '1',
@@ -523,6 +648,76 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return { newTerms: finalTerms, changed: true, explanation };
+    }
+
+    /**
+     * NOVO: Processa a fatoração quando o fator comum é um termo complexo (entre parênteses).
+     * Exemplo: AC(B⊙D) + A'C'(B⊙D) => (A⊙C)(B⊙D)
+     * @param {Array} termsWithMeta - A lista atual de termos com seus metadados.
+     * @returns {Object} - Um objeto indicando se a simplificação ocorreu e a nova lista de termos.
+     */
+    function processFactoringWithComplexTerms(termsWithMeta) {
+        const parseTermStructure = (termStr) => {
+            // Regex para capturar um prefixo e uma parte complexa em parênteses.
+            const match = termStr.match(/^(.*?)\((.*)\)('?)$/);
+            if (match) {
+                // O que vem antes dos parênteses é o prefixo.
+                const prefix = match[1] || ''; 
+                // O que está dentro dos parênteses, incluindo a negação final se houver.
+                const complexPart = `(${match[2]})${match[3]}`;
+                return { prefix, complexPart };
+            }
+            return { prefix: termStr, complexPart: null };
+        };
+
+        for (let i = 0; i < termsWithMeta.length; i++) {
+            for (let j = i + 1; j < termsWithMeta.length; j++) {
+                const term1 = termsWithMeta[i];
+                const term2 = termsWithMeta[j];
+
+                const struct1 = parseTermStructure(term1.term);
+                const struct2 = parseTermStructure(term2.term);
+
+                // Continua apenas se ambos os termos tiverem uma parte complexa e se essas partes forem idênticas.
+                if (struct1.complexPart && struct1.complexPart === struct2.complexPart) {
+                    
+                    // Os prefixos que serão somados e simplificados.
+                    const prefixesToSimplify = [
+                        { term: struct1.prefix || '1', color: term1.color },
+                        { term: struct2.prefix || '1', color: term2.color }
+                    ];
+
+                    // Usa a lógica de simplificação interna que já criamos.
+                    const simplifiedPrefixTerms = runInnerSimplification(prefixesToSimplify);
+                    
+                    // Combina o prefixo simplificado com a parte complexa comum.
+                    const simplifiedPrefixStr = simplifiedPrefixTerms.map(t => t.term).join(' + ');
+
+                    // Formata o novo termo final.
+                    let newTermStr;
+                    if (simplifiedPrefixTerms.length === 1) {
+                         // Se o prefixo simplificado já for complexo, não adiciona parênteses extras.
+                        if (simplifiedPrefixStr.startsWith('(') && (simplifiedPrefixStr.endsWith(')') || simplifiedPrefixStr.endsWith(")'"))) {
+                            newTermStr = `${simplifiedPrefixStr}${struct1.complexPart}`;
+                        } else {
+                            newTermStr = `(${simplifiedPrefixStr})${struct1.complexPart}`;
+                        }
+                    } else {
+                        newTermStr = `(${simplifiedPrefixStr})${struct1.complexPart}`;
+                    }
+                    
+                    // Cria a nova lista de termos, substituindo os dois termos antigos pelo novo.
+                    const newTermsList = [...termsWithMeta];
+                    newTermsList.splice(j, 1); // Remove o segundo termo primeiro para não bagunçar o índice.
+                    newTermsList.splice(i, 1, { term: newTermStr, color: term1.color });
+
+                    const explanation = `O fator comum <strong>${struct1.complexPart}</strong> foi colocado em evidência nos termos <strong>${term1.term}</strong> e <strong>${term2.term}</strong>. A expressão dos prefixos <strong>${struct1.prefix} + ${struct2.prefix}</strong> foi simplificada para <strong>${simplifiedPrefixStr}</strong>.`;
+
+                    return { newTerms: newTermsList, changed: true, explanation };
+                }
+            }
+        }
+        return { changed: false };
     }
 
     function runInnerSimplification(terms) {
@@ -560,7 +755,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generatePotentialFactors(terms) {
-        const countLiterals = (str) => (str.match(/[A-F]/g) || []).length;
+        const regex = new RegExp(`(${varNames.join('|')})`, 'g');
+        const countLiterals = (str) => (str.match(regex) || []).length;
 
         const prefixMap = new Map();
         terms.forEach(termObj => {
@@ -583,7 +779,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getPrefixes(term) {
-        const literals = term.match(/[A-F]'?/g) || [];
+        const regex = new RegExp(`(${varNames.join('|')})'?`, 'g');
+        const literals = term.match(regex) || [];
         if (literals.length === 0) return [];
         const prefixes = new Set();
         const n = literals.length;
@@ -596,28 +793,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return Array.from(prefixes);
     }
-
-    function countLiteralsInExpression(termStrings) {
-        let count = 0;
-        termStrings.forEach(str => {
-            const literals = str.match(/[A-F]/g);
-            if (literals) count += literals.length;
-        });
-        return count;
-    }
     
+    /**
+     * MODIFICADO: Formata TODAS as ocorrências de (P ⊕ Q)' para a notação XNOR (P ⊙ Q).
+     * @param {string} termStr - A string do termo a ser formatada.
+     * @returns {string} - A string com todas as notações XNOR convertidas.
+     */
     function formatWithXNOR(termStr) {
-        const match = termStr.match(/^(.*)\(([^()]+⊕[^()]+)\)'$/);
+        // Regex para encontrar TODAS as ocorrências de (P ⊕ Q)'
+        // O 'g' no final (global) é crucial para encontrar mais de uma correspondência.
+        // A interrogação (?) nos quantificadores (+) os torna "não gulosos" (lazy),
+        // garantindo que cada par de parênteses seja tratado individualmente.
+        const xnorPattern = /\(([^()]+?⊕[^()]+?)\)'/g;
 
-        if (match) {
-            const prefix = match[1];
-            const xorPart = match[2];
-            
-            const xnorPart = xorPart.replace('⊕', '⊙');
-            return `${prefix}(${xnorPart})`;
+        // Verifica se a string contém o padrão a ser substituído.
+        if (!xnorPattern.test(termStr)) {
+            return termStr;
         }
-    
-        return termStr;
+
+        // Usa a função replace com uma função de callback para fazer a substituição.
+        // O callback é executado para cada correspondência encontrada pela regex global.
+        // `match` é a correspondência inteira (ex: "(A ⊕ C)'")
+        // `capturedXorPart` é o que foi capturado pelo grupo em parênteses na regex (ex: "A ⊕ C")
+        return termStr.replace(xnorPattern, (match, capturedXorPart) => {
+            // Substitui o símbolo de XOR por XNOR dentro da parte capturada.
+            const xnorPart = capturedXorPart.replace('⊕', '⊙');
+            // Retorna a nova sub-string formatada (ex: '(A ⊙ C)').
+            return `(${xnorPart})`;
+        });
     }
 
     function showCopyFeedback(button, iconClass) {
@@ -631,8 +834,6 @@ document.addEventListener('DOMContentLoaded', () => {
             button.style.color = '';
         }, 1500);
     }
-
-    // --- Configuração dos Eventos da Interface ---
 
     btnIncrement.addEventListener('click', () => { let v = parseInt(numVariaveisInput.value); if (v < 6) { numVariaveisInput.value = v + 1; gerarTabelaVerdade(); } });
     btnDecrement.addEventListener('click', () => { let v = parseInt(numVariaveisInput.value); if (v > 2) { numVariaveisInput.value = v - 1; gerarTabelaVerdade(); } });
@@ -648,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnCopyMap.addEventListener('click', () => {
         const originalText = btnCopyMap.textContent;
-        btnCopyMap.disabled = true; // Desativa o botão imediatamente
+        btnCopyMap.disabled = true;
 
         const areaParaCapturar = document.querySelector('.kmap-and-expression');
         html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
@@ -659,29 +860,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         btnCopyMap.textContent = 'Copiado!';
                         setTimeout(() => { 
                             btnCopyMap.textContent = originalText; 
-                            btnCopyMap.disabled = false; // Reativa o botão no final
+                            btnCopyMap.disabled = false;
                         }, 1500);
                     }).catch(err => {
                         console.error('Erro ao copiar imagem:', err);
                         alert('Falha ao copiar imagem para a área de transferência.');
                         btnCopyMap.textContent = originalText;
-                        btnCopyMap.disabled = false; // Reativa o botão em caso de erro
+                        btnCopyMap.disabled = false;
                     });
                 } else {
                     alert('Seu navegador não suporta copiar imagens para a área de transferência.');
                     btnCopyMap.textContent = originalText;
-                    btnCopyMap.disabled = false; // Reativa o botão em caso de erro
+                    btnCopyMap.disabled = false;
                 }
             }, 'image/png');
         }).catch(err => {
             console.error('Erro ao renderizar imagem:', err);
             btnCopyMap.textContent = originalText;
-            btnCopyMap.disabled = false; // Reativa o botão em caso de erro
+            btnCopyMap.disabled = false;
         });
     });
-
-    // **REMOVIDO**: Evento de clique para o botão "Mostrar Passos"
-    // btnMostrarPassos.addEventListener('click', () => { ... });
 
     stepsContainer.addEventListener('click', (event) => {
         const copyBtn = event.target.closest('.copy-step-btn');
@@ -695,7 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnCopySteps.addEventListener('click', () => {
         const originalText = btnCopySteps.textContent;
-        btnCopySteps.disabled = true; // Desativa o botão imediatamente
+        btnCopySteps.disabled = true;
         
         const stepsContent = document.getElementById('simplification-steps-container');
         const styles = `
@@ -720,20 +918,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnCopySteps.textContent = 'Copiado!';
                 setTimeout(() => { 
                     btnCopySteps.textContent = originalText; 
-                    btnCopySteps.disabled = false; // Reativa o botão no final
+                    btnCopySteps.disabled = false;
                 }, 1500);
             }).catch(err => {
                 console.error('Falha ao copiar conteúdo formatado:', err);
                 alert('Falha ao copiar os passos.');
                 btnCopySteps.textContent = originalText;
-                btnCopySteps.disabled = false; // Reativa o botão em caso de erro
+                btnCopySteps.disabled = false;
             });
         } catch (e) {
             console.error('Falha ao criar blob para cópia:', e);
             alert('Seu navegador não suporta a cópia de conteúdo formatado.');
             btnCopySteps.textContent = originalText;
-            btnCopySteps.disabled = false; // Reativa o botão em caso de erro
+            btnCopySteps.disabled = false;
         }
+    });
+
+    btnCopiarTabela.addEventListener('click', () => {
+        const originalText = btnCopiarTabela.textContent;
+        btnCopiarTabela.disabled = true;
+
+        const areaParaCapturar = document.querySelector('#tabela-container table');
+
+        html2canvas(areaParaCapturar, { 
+            backgroundColor: '#ffffff',
+            useCORS: true, 
+            scale: 2
+        }).then(canvas => {
+            canvas.toBlob(blob => {
+                if (blob && navigator.clipboard && window.ClipboardItem) {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    navigator.clipboard.write([item]).then(() => {
+                        btnCopiarTabela.textContent = 'Copiado!';
+                        setTimeout(() => { 
+                            btnCopiarTabela.textContent = originalText; 
+                            btnCopiarTabela.disabled = false;
+                        }, 1500);
+                    }).catch(err => {
+                        console.error('Erro ao copiar tabela como imagem:', err);
+                        alert('Falha ao copiar tabela para a área de transferência.');
+                        btnCopiarTabela.textContent = originalText;
+                        btnCopiarTabela.disabled = false;
+                    });
+                } else {
+                    alert('Seu navegador não suporta copiar imagens para a área de transferência.');
+                    btnCopiarTabela.textContent = originalText;
+                    btnCopiarTabela.disabled = false;
+                }
+            }, 'image/png');
+        }).catch(err => {
+            console.error('Erro ao renderizar a tabela como imagem:', err);
+            alert('Ocorreu um erro ao gerar a imagem da tabela.');
+            btnCopiarTabela.textContent = originalText;
+            btnCopiarTabela.disabled = false;
+        });
     });
 
     // --- Inicialização da Aplicação ---

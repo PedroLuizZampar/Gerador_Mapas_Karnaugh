@@ -133,10 +133,11 @@ table {
     box-shadow: none; /* Remove a sombra, já que o card pai tem a sua */
 }
 
+/* CORRIGIDO: Removido 'display: flex' para consertar o layout da linha do cabeçalho. */
 thead th {
-    background-color: var(--slate-600); /* Fundo mais suave */
+    background-color: var(--slate-600);
     color: var(--white);
-    font-weight: 600; /* Um pouco mais de peso */
+    font-weight: 600;
     border-bottom: 2px solid var(--slate-300);
 }
 
@@ -145,6 +146,7 @@ th, td {
     padding: 0.8rem 1rem;
     text-align: center;
     border: 1px solid var(--slate-200);
+    vertical-align: middle; /* NOVO: Garante o alinhamento vertical do conteúdo. */
 }
 
 tbody tr:nth-child(even) { background-color: transparent; }
@@ -192,6 +194,10 @@ tbody tr:hover { background-color: var(--blue-100); }
     font-size: 1.5rem;
     border-radius: 2rem;
     padding: 0 1.1rem 0 1.1rem;
+}
+
+#btn-copiar-tabela {
+    margin-top: 0.5rem;
 }
 
 /* --- PASSO 5: LAYOUT DA TELA DE RESULTADOS (A GRANDE MUDANÇA) --- */
@@ -273,6 +279,8 @@ tbody tr:hover { background-color: var(--blue-100); }
     font-family: var(--font-mono);
     color: var(--kmap-header-color);
     font-weight: bold;
+    align-self: center;
+    justify-self: center;
 }
 .kmap-group {
     border: solid;
@@ -417,4 +425,23 @@ tbody tr:hover { background-color: var(--blue-100); }
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+}
+
+/* NOVO: Estilos para o ícone de edição de variável */
+.variable-name {
+    margin-right: 0.5rem;
+}
+
+.edit-icon {
+    cursor: pointer;
+    transition: color 0.2s ease-in-out;
+}
+
+thead .edit-icon {
+    font-size: 1em;
+    color: var(--slate-300);
+}
+
+thead .edit-icon:hover {
+    color: var(--white);
 }
