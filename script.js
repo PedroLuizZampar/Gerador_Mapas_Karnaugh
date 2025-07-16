@@ -24,18 +24,31 @@ document.addEventListener('DOMContentLoaded', () => {
     let simplificationStepsLog = [];
 
     /**
-     * NOVO: Converte os dígitos de uma string para seus equivalentes em subscrito (Unicode).
+     * NOVO: Converte os dígitos e as strings "in"/"out" para seus equivalentes em subscrito (Unicode).
      * @param {string} name - O nome da variável a ser formatado.
-     * @returns {string} - O nome com os números em formato subscrito.
+     * @returns {string} - O nome com os números e palavras "in"/"out" em formato subscrito.
      */
     function formatNameToSubscript(name) {
-        const subscriptDigits = {
-            '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
-            '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉'
-        };
-        // Usa uma expressão regular para encontrar todos os dígitos na string e substituí-los.
-        return String(name).replace(/\d/g, digit => subscriptDigits[digit] || digit);
-    }
+    // O objeto agora mapeia tanto os dígitos quanto as novas strings.
+    const subscriptMap = {
+        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+        '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+        'in': 'ᵢₙ',  // Mapeia "in" para seus caracteres subscritos
+        'out': 'ₒᵤₜ' // Mapeia "out" para seus caracteres subscritos
+    };
+
+    // A expressão regular agora busca por "out", "in" ou qualquer dígito (\d).
+    // A ordem "out|in" é importante para evitar que "in" seja encontrado dentro de "out".
+    // O 'g' é para busca global (todas as ocorrências) e 'i' para ser case-insensitive (ignorar maiúsculas/minúsculas).
+    const regex = /out|in|\d/gi;
+
+    return String(name).replace(regex, (match) => {
+        // Converte o trecho encontrado para minúsculas para corresponder às chaves do mapa.
+        const key = match.toLowerCase();
+        // Retorna o subscrito correspondente ou o próprio trecho se não houver correspondência.
+        return subscriptMap[key] || match;
+    });
+}
 
     const switchView = (viewToShow) => {
         document.querySelectorAll('.view-container').forEach(view => {
@@ -418,7 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(firstBit==="0")term+="'"
             }
         }
-        const termParts=term.match(new RegExp(`(${varNames.join('|')})'?`, 'g')); 
+        const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+        const termParts = term.match(new RegExp(`(${sortedVars.join('|')})'?`, 'g'));
         if(!termParts)return"";
         return termParts.sort((a,b)=>a.localeCompare(b)).join("")
     }
@@ -427,7 +441,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const parseTerm = (termStr) => {
             const vars = {};
             if (termStr === '1') return vars;
-            const parts = termStr.match(new RegExp(`(${varNames.join('|')})'?`, 'g')) || [];
+            const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+            const parts = termStr.match(new RegExp(`(${sortedVars.join('|')})'?`, 'g')) || [];
             parts.forEach(part => {
                 const varName = part.replace("'", "");
                 vars[varName] = !part.includes("'");
@@ -513,7 +528,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const parseTerm = (termStr) => {
             const vars = {};
             if (termStr === '1' || termStr === '') return vars;
-            const parts = termStr.match(new RegExp(`(${varNames.join('|')})'?`, 'g')) || [];
+            const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+            const parts = termStr.match(new RegExp(`(${sortedVars.join('|')})'?`, 'g')) || [];
             parts.forEach(part => {
                 const varName = part.replace("'", "");
                 vars[varName] = !part.includes("'");
@@ -574,7 +590,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const finalIsXnor = (pIsNegatedInTerm1 === qIsXnorInTerm1);
                         
                         const pTerm = diffVar;
-                        const qVars = parsed1.xorPart.match(/[\w']+/g) || [];
+                        const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+                        const qVars = parsed1.xorPart.match(new RegExp(`(${sortedVars.join('|')})`, 'g')) || [];
+                        
                         const allXorVars = [pTerm, ...qVars].sort((a,b) => a.localeCompare(b));
 
                         let newTermStr = `(${allXorVars.join(' ⊕ ')})`;
@@ -616,7 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const leftoverTerms = simpleTerms.filter(t => !groupTermSet.has(t.term));
         
         const remainders = groupTermObjs.map(termObj => {
-            const regex = new RegExp(`(${varNames.join('|')})'?`, 'g');
+            const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+            const regex = new RegExp(`(${sortedVars.join('|')})'?`, 'g');
             const termLiterals = new Set(termObj.term.match(regex) || []);
             const prefixLiterals = new Set(bestFactor.prefix.match(regex) || []);
             const remainderLiterals = [...termLiterals].filter(lit => !prefixLiterals.has(lit));
@@ -755,7 +774,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generatePotentialFactors(terms) {
-        const regex = new RegExp(`(${varNames.join('|')})`, 'g');
+        const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+        const regex = new RegExp(`(${sortedVars.join('|')})`, 'g');
         const countLiterals = (str) => (str.match(regex) || []).length;
 
         const prefixMap = new Map();
@@ -779,7 +799,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getPrefixes(term) {
-        const regex = new RegExp(`(${varNames.join('|')})'?`, 'g');
+        const sortedVars = [...varNames].sort((a, b) => b.length - a.length);
+        const regex = new RegExp(`(${sortedVars.join('|')})'?`, 'g');
         const literals = term.match(regex) || [];
         if (literals.length === 0) return [];
         const prefixes = new Set();
