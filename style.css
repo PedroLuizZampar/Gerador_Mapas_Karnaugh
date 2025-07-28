@@ -215,25 +215,21 @@ tbody tr:hover { background-color: var(--blue-100); }
  */
 .results-wrapper {
     display: flex;
-    flex-direction: row;
-    gap: 2.5rem;
+    gap: 2rem;
+    width: 100%;
 }
 
-.results-column {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-#map-column {
-    flex: 1 1 50%; /* Ocupa 50% do espaço, mas pode encolher/crescer */
+/* CORRIGIDO: Usei um seletor de atributo para abranger todos os IDs que começam com "map-column" */
+[id^="map-column"] {
+    flex: 1 1 60%; /* Ocupa 60% do espaço */
     display: flex;
     flex-direction: column;
     align-items: center; /* Centraliza o mapa e o botão */
 }
 
-#expression-column {
-    flex: 1 1 50%;
+/* CORRIGIDO: Usei um seletor de atributo para abranger todos os IDs que começam com "expression-column" */
+[id^="expression-column"] {
+    flex: 1 1 40%; /* Ocupa 40% do espaço */
     text-align: left;
 }
 
@@ -427,18 +423,48 @@ tbody tr:hover { background-color: var(--blue-100); }
     gap: 0.5rem;
 }
 
+/* --- PASSO 9: ESTILOS PARA MÚLTIPLAS SAÍDAS --- */
+
+.output-section {
+    background-color: var(--slate-100);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.output-section:last-child {
+    margin-bottom: 0;
+}
+
+.output-header {
+    text-align: left;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--slate-300);
+}
+
+.output-header h2 {
+    font-size: 1.5rem;
+    color: var(--slate-800);
+    margin: 0;
+}
+
 /* NOVO: Estilos para o ícone de edição de variável */
 .variable-name {
     margin-right: 0.5rem;
+    font-weight: 600;
 }
 
 .edit-icon {
     cursor: pointer;
-    transition: color 0.2s ease-in-out;
+    color: var(--slate-400);
+    font-size: 0.9rem;
+    transition: color 0.2s;
+    vertical-align: middle;
 }
 
 thead .edit-icon {
-    font-size: 1em;
     color: var(--slate-300);
 }
 

@@ -27,6 +27,14 @@
                 <input type="number" id="numVariaveis" min="2" max="6" value="4" readonly>
                 <button id="btn-increment" aria-label="Aumentar variáveis">+</button>
             </div>
+            
+            <label id="num-saidas" for="numSaidas">Número de Saídas:</label>
+            <div class="stepper">
+                <button id="btn-decrement-saidas" aria-label="Diminuir saídas">-</button>
+                <input type="number" id="numSaidas" min="1" max="8" value="1" readonly>
+                <button id="btn-increment-saidas" aria-label="Aumentar saídas">+</button>
+            </div>
+            
             <button id="btn-gerar-mapa" class="btn-primary">Gerar Mapa de Karnaugh</button>
         </div>
 
@@ -41,38 +49,8 @@
             <h1>Resultados da Simplificação</h1>
         </header>
         
-        <div class="results-wrapper">
-
-            <div class="results-column" id="map-column">
-                <div class="kmap-and-expression">
-                    <div id="kmap-container">
-                        </div> 
-                </div>
-                <div class="action-buttons">
-                    <button id="btn-copiar-mapa" class="btn-secondary">Copiar Mapa</button>
-                </div>
-            </div>
-            
-            <div class="results-column" id="expression-column">
-                <div class="expression-card">
-                    <h2>Expressão Simplificada</h2>
-                    <div class="expression-content">
-                        <p id="simplified-expression">S = ?</p>
-                        <button id="btn-copy-main-expression" class="copy-icon-button" title="Copiar Expressão" style="display: none;">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="steps-card">
-                    <h2>Passo a Passo da Simplificação</h2>
-                    <div id="simplification-steps-container">
-                        </div>
-                    <div class="action-buttons steps-action">
-                         <button id="btn-copy-steps" class="btn-secondary" style="display: none;">Copiar Passos</button>
-                    </div>
-                </div>
-            </div>
+        <div id="outputs-container">
+            <!-- Seções para cada saída serão geradas dinamicamente aqui -->
         </div>
     </div>
 
