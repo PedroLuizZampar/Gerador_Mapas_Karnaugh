@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const estadosSaida = ['0', '1', 'X'];
     let varNames = ['A', 'B', 'C', 'D', 'E', 'F']; 
     let outputVarNames = ['S']; // Array para múltiplas saídas
-    const GROUP_COLORS = ['#f44336', '#2196f3', '#4caf50', '#ffc107', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722'];
+    const GROUP_COLORS = ['#f7685eff', '#61b2f5ff', '#83d485ff', '#ebc85eff', '#c16fcfff', '#eb7dbdff', '#7ed3d3ff', '#e08164ff'];
     let simplificationStepsLog = [];
 
     /**
@@ -629,35 +629,79 @@ document.addEventListener('DOMContentLoaded', () => {
         return expanded;
     }
     function selectMinimalCover(primeImplicants, minterms) {
+        if (minterms.length === 0) return [];
+
         const mintermSet = new Set(minterms);
-        let uncoveredMinterms = new Set(mintermSet);
-        const cover = [];
-        const implicantObjects = primeImplicants.map(imp => {
-            const expanded = expandImplicant(getTermForGroup(primeImplicants.length, imp, true), primeImplicants.length);
+        const chart = new Map(minterms.map(m => [m, []]));
+
+        const implicantObjects = primeImplicants.map((imp, index) => {
+            const term = getTermForGroup(varNames.length, imp); // Use varNames.length for numVars
+            const covers = new Set(imp.filter(m => mintermSet.has(m)));
+            
+            covers.forEach(m => {
+                if (chart.has(m)) {
+                    chart.get(m).push(index);
+                }
+            });
+
             return {
+                id: index,
                 implicant: imp,
-                covers: new Set(expanded.filter(m => mintermSet.has(m))),
-                cost: imp.length - (imp.join('').match(/-/g) || []).length
+                covers: covers,
+                cost: (term.match(/[A-Z]/gi) || []).length, // Custo é o número de literais
+                isEssential: false
             };
         });
 
+        const cover = [];
+        const coveredMinterms = new Set();
+
+        // 1. Encontrar e adicionar implicantes essenciais
+        chart.forEach((implicantIndices, minterm) => {
+            if (implicantIndices.length === 1) {
+                const essentialImplicant = implicantObjects[implicantIndices[0]];
+                if (!essentialImplicant.isEssential) {
+                    essentialImplicant.isEssential = true;
+                    cover.push(essentialImplicant);
+                    essentialImplicant.covers.forEach(m => coveredMinterms.add(m));
+                }
+            }
+        });
+
+        let uncoveredMinterms = new Set([...mintermSet].filter(m => !coveredMinterms.has(m)));
+
+        // 2. Cobrir minterms restantes com uma abordagem gulosa (heurística)
         while (uncoveredMinterms.size > 0) {
+            const remainingImplicants = implicantObjects.filter(impObj => !impObj.isEssential);
+            
             let bestImplicant = null;
             let maxCovered = -1;
+            let minCost = Infinity;
 
-            implicantObjects.forEach(impObj => {
-                const coveredNow = new Set([...uncoveredMinterms].filter(m => impObj.covers.has(m)));
-                if (coveredNow.size > maxCovered) {
-                    maxCovered = coveredNow.size;
-                    bestImplicant = impObj;
+            remainingImplicants.forEach(impObj => {
+                const newlyCovered = new Set([...impObj.covers].filter(m => uncoveredMinterms.has(m)));
+                
+                if (newlyCovered.size > 0) {
+                    if (newlyCovered.size > maxCovered) {
+                        maxCovered = newlyCovered.size;
+                        minCost = impObj.cost;
+                        bestImplicant = impObj;
+                    } else if (newlyCovered.size === maxCovered) {
+                        if (impObj.cost < minCost) {
+                            minCost = impObj.cost;
+                            bestImplicant = impObj;
+                        }
+                    }
                 }
             });
 
             if (bestImplicant) {
                 cover.push(bestImplicant);
-                bestImplicant.covers.forEach(m => uncoveredMinterms.delete(m));
-                implicantObjects.splice(implicantObjects.indexOf(bestImplicant), 1);
+                bestImplicant.isEssential = true; // Marcar como usado
+                bestImplicant.covers.forEach(m => coveredMinterms.add(m));
+                uncoveredMinterms = new Set([...mintermSet].filter(m => !coveredMinterms.has(m)));
             } else {
+                // Se não houver mais implicantes para cobrir, saia do loop
                 break;
             }
         }
@@ -1240,7 +1284,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- LÓGICA PARA ALTERNÂNCIA DE TEMA ---
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = themeToggle.querySelector('i');
+
+    const applyTheme = (theme) => {
+        document.body.dataset.theme = theme;
+        if (theme === 'dark') {
+            themeIcon.classList.remove('bi-moon-fill');
+            themeIcon.classList.add('bi-sun-fill');
+        } else {
+            themeIcon.classList.remove('bi-sun-fill');
+            themeIcon.classList.add('bi-moon-fill');
+        }
+    };
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.body.dataset.theme || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        applyTheme(newTheme);
+    });
+
     // --- Inicialização da Aplicação ---
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
     gerarTabelaVerdade();
     switchView(mainView);
 });

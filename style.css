@@ -8,6 +8,7 @@
 :root {
     /* Paleta de cores refinada */
     --blue-900: #0c4a6e;  /* Azul escuro para texto importante */
+    --blue-700: #1d4ed8;
     --blue-600: #2563eb;  /* Azul principal para botões e interações */
     --blue-500: #3b82f6;
     --blue-100: #dbeafe;
@@ -78,18 +79,17 @@ header h1 {
 
 header p {
     font-size: 1.1rem;
-    color: var(--slate-600);
+    color: var(--slate-900);
     max-width: 650px;
     margin: 0 auto 2.5rem auto;
 }
 
 /* --- PASSO 3: ESTILOS DOS INPUTS E TABELA --- */
 
-#num-variaveis {
-    font-size: 1.2rem;
-    color: var(--slate-600);
+#num-variaveis, #num-saidas {
+    font-size: 1rem;
+    color: var(--slate-900);
     font-weight: 500;
-    margin-right: 0.5rem; /* Espaço entre o label e o stepper */
 }
 
 .input-section {
@@ -111,7 +111,7 @@ header p {
 }
 .stepper input[type="number"] { width: 60px; height: 45px; text-align: center; font-size: 1.25rem; font-weight: 700; border: none; color: var(--blue-600); background-color: transparent; appearance: textfield; -moz-appearance: textfield; }
 .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.stepper button { width: 45px; height: 45px; border: none; background-color: transparent; font-size: 1.75rem; font-weight: 400; color: var(--blue-500); cursor: pointer; transition: background-color 0.2s; }
+.stepper button { width: 45px; height: 50px; border: none; background-color: transparent; font-size: 1.75rem; font-weight: 400; color: var(--blue-500); cursor: pointer; transition: background-color 0.2s; }
 .stepper button:hover { background-color: var(--blue-100); }
 .stepper button:first-child { border-right: 1px solid var(--slate-300); }
 .stepper button:last-child { border-left: 1px solid var(--slate-300); }
@@ -183,7 +183,7 @@ tbody tr:hover { background-color: var(--blue-100); }
     box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover, .btn-secondary:hover, #btn-voltar:hover {
-    background-color: #1d4ed8;
+    background-color: var(--blue-500);
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
 }
@@ -294,6 +294,7 @@ tbody tr:hover { background-color: var(--blue-100); }
     border-radius: var(--border-radius-lg);
     padding: 1.5rem;
     border: 1px solid var(--slate-200);
+    margin-bottom: 20px;
 }
 
 .expression-card h2, .steps-card h2 {
@@ -393,7 +394,7 @@ tbody tr:hover { background-color: var(--blue-100); }
 
 .step-explanation {
     font-size: 1rem;
-    color: var(--slate-600);
+    color: var(--slate-900);
     margin-top: 0.25rem;
 }
 
@@ -470,4 +471,71 @@ thead .edit-icon {
 
 thead .edit-icon:hover {
     color: var(--white);
+}
+
+/* --- PASSO 10: MODO ESCURO E BOTÃO DE TEMA --- */
+
+#theme-toggle {
+    position: fixed;
+    bottom: 5%;
+    right: 5%;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--slate-600);
+    color: var(--slate-100);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+#theme-toggle:hover {
+    transform: scale(1.1);
+    background-color: var(--slate-800);
+}
+
+/* Variáveis de cor para o modo escuro */
+body[data-theme='dark'] {
+    --blue-900: #93c5fd;
+    --blue-700: #4289fa;
+    --blue-600: #76b3fd;
+    --blue-500: #5d9afc;
+    --blue-100: #1e293b;
+    --slate-900: #d6eaff;
+    --slate-800: #e2e8f0;
+    --slate-600: #96b7e6;
+    --slate-300: #475569;
+    --slate-200: #334155;
+    --slate-100: #1e293b;
+    --white: #1b2333;
+    --kmap-header-color: #a5b4fc;
+    --orange: #fb923c;
+}
+
+/* Ajustes específicos para elementos no modo escuro */
+body[data-theme='dark'] #theme-toggle {
+    background-color: var(--slate-800);
+    color: var(--slate-100);
+}
+
+body[data-theme='dark'] #theme-toggle:hover {
+    background-color: var(--slate-600);
+}
+
+body[data-theme='dark'] .stepper input[type="number"] {
+    color: var(--slate-800);
+}
+
+body[data-theme='dark'] .stepper button {
+    color: var(--blue-900);
+}
+
+body[data-theme='dark'] .stepper button:hover {
+    background-color: var(--slate-200);
 }
