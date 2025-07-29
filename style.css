@@ -221,7 +221,7 @@ tbody tr:hover { background-color: var(--blue-100); }
 
 /* CORRIGIDO: Usei um seletor de atributo para abranger todos os IDs que começam com "map-column" */
 [id^="map-column"] {
-    flex: 1 1 60%; /* Ocupa 60% do espaço */
+    flex: 1 1 40%;
     display: flex;
     flex-direction: column;
     align-items: center; /* Centraliza o mapa e o botão */
@@ -229,7 +229,7 @@ tbody tr:hover { background-color: var(--blue-100); }
 
 /* CORRIGIDO: Usei um seletor de atributo para abranger todos os IDs que começam com "expression-column" */
 [id^="expression-column"] {
-    flex: 1 1 40%; /* Ocupa 40% do espaço */
+    flex: 1 1 60%;
     text-align: left;
 }
 
@@ -255,8 +255,8 @@ tbody tr:hover { background-color: var(--blue-100); }
     margin: 15px;
 }
 .kmap-cell {
-    width: 60px; /* Reduz o tamanho da célula para mapas maiores caberem melhor */
-    height: 60px;
+    width: 75px; /* Reduz o tamanho da célula para mapas maiores caberem melhor */
+    height: 75px;
     display: flex;
     justify-content: center;
     align-items: center;
