@@ -42,6 +42,7 @@ body {
     color: var(--slate-800);
     margin: 0;
     padding: 2rem;
+    padding-top: 80px; /* Espaço para a navbar fixa */
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -473,32 +474,188 @@ thead .edit-icon:hover {
     color: var(--white);
 }
 
-/* --- PASSO 10: MODO ESCURO E BOTÃO DE TEMA --- */
+/* NOVO: Estilos para a coluna de ações da linha e o estado oculto */
+.row-actions {
+    padding: 0.5rem;
+    /* Adiciona uma borda direita mais espessa para separar a coluna de ações */
+    border-right: 2px solid var(--slate-300);
+}
 
-#theme-toggle {
-    position: fixed;
-    bottom: 5%;
-    right: 5%;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: none;
-    background-color: var(--slate-600);
-    color: var(--slate-100);
-    font-size: 1.2rem;
+/* NOVO: Estilo para a linha separadora entre entradas e saídas */
+.input-separator {
+    border-right: 2px solid var(--slate-300);
+}
+
+.toggle-visibility-btn {
     cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s ease;
-    z-index: 1000;
+    font-size: 1.2rem;
+    color: var(--slate-400);
+    transition: color 0.2s;
 }
 
-#theme-toggle:hover {
-    transform: scale(1.1);
-    background-color: var(--slate-800);
+.toggle-visibility-btn:hover {
+    color: var(--slate-600);
 }
+
+tr.row-hidden {
+    opacity: 0.5;
+    background-color: var(--slate-200) !important; /* Garante que o fundo mude */
+    text-decoration: line-through;
+    text-decoration-color: var(--slate-400);
+}
+
+/* --- PASSO 10: HEADER E MENU HAMBÚRGUER --- */
+
+#main-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background-color: var(--white);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+    z-index: 1000;
+    transition: background-color 0.3s ease;
+}
+
+#hamburger-btn {
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--slate-800);
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+#hamburger-btn:hover {
+    background-color: var(--slate-100);
+}
+
+.header-brand {
+    flex-grow: 1;
+    text-align: center;
+    padding-right: 2.5rem; /* Compensar o espaço do botão hambúrguer */
+}
+
+.header-brand a {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    text-decoration: none;
+}
+
+.sidenav {
+    height: 100%;
+    width: 0;
+    position: fixed;
+    z-index: 1001;
+    top: 0;
+    left: 0;
+    background-color: var(--white);
+    overflow-x: hidden;
+    transition: 0.3s ease-out;
+    box-shadow: var(--shadow-lg);
+}
+
+.sidenav .closebtn {
+    position: absolute;
+    right: 25px;
+    font-size: 36px;
+    text-decoration: none;
+    color: var(--slate-600);
+    padding: 0;
+    top: -2px;
+}
+
+.sidenav .closebtn:hover {
+    color: var(--slate-900);
+}
+
+.sidenav a {
+    padding: 8px 8px 8px 32px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    color: var(--slate-600);
+    display: block;
+    transition: 0.2s;
+}
+
+.sidenav a:not(.closebtn):hover {
+    background-color: var(--slate-100);
+    color: var(--blue-600);
+}
+
+.sidenav-header {
+    padding: 16px 8px 8px 32px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    text-transform: uppercase;
+}
+
+.sidenav .theme-switcher-container {
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--slate-600);
+    border-bottom: 1px solid var(--slate-200);
+}
+
+.theme-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.theme-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: var(--blue-600);
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+.slider.round {
+    border-radius: 26px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* --- PASSO 11: MODO ESCURO --- */
 
 /* Variáveis de cor para o modo escuro */
 body[data-theme='dark'] {
@@ -519,13 +676,33 @@ body[data-theme='dark'] {
 }
 
 /* Ajustes específicos para elementos no modo escuro */
-body[data-theme='dark'] #theme-toggle {
-    background-color: var(--slate-800);
-    color: var(--slate-100);
+body[data-theme='dark'] #main-header {
+    background-color: var(--white);
 }
-
-body[data-theme='dark'] #theme-toggle:hover {
-    background-color: var(--slate-600);
+body[data-theme='dark'] #hamburger-btn {
+    color: var(--slate-800);
+}
+body[data-theme='dark'] #hamburger-btn:hover {
+    background-color: var(--slate-200);
+}
+body[data-theme='dark'] .header-brand a {
+    color: var(--slate-900);
+}
+body[data-theme='dark'] .sidenav {
+    background-color: var(--white);
+}
+body[data-theme='dark'] .sidenav a {
+    color: var(--slate-800);
+}
+body[data-theme='dark'] .sidenav a:hover {
+    background-color: var(--slate-200);
+}
+body[data-theme='dark'] .sidenav-header {
+    color: var(--slate-600);
+}
+body[data-theme='dark'] .sidenav .theme-switcher-container {
+    color: var(--slate-600);
+    border-bottom-color: var(--slate-300);
 }
 
 body[data-theme='dark'] .stepper input[type="number"] {

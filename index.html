@@ -14,9 +14,45 @@
 </head>
 <body>
 
-    <button id="theme-toggle" title="Alternar tema">
-        <i class="bi bi-moon-fill"></i>
-    </button>
+    <header id="main-header">
+        <span id="hamburger-btn" title="Abrir menu de exemplos">&#9776;</span>
+        <div class="header-brand">
+            <a href="#">Gerador de Mapas de Karnaugh</a>
+        </div>
+    </header>
+
+    <div id="sidenav-menu" class="sidenav">
+        <a href="javascript:void(0)" class="closebtn" title="Fechar menu">&times;</a>
+        
+        <div class="theme-switcher-container">
+            <i class="bi bi-sun-fill"></i>
+            <label class="theme-switch">
+                <input type="checkbox" id="theme-checkbox">
+                <span class="slider round"></span>
+            </label>
+            <i class="bi bi-moon-fill"></i>
+        </div>
+
+        <div class="sidenav-header">Comparadores 1-bit</div>
+        <a href="#" data-example="comp-gt-1bit">A > B</a>
+        <a href="#" data-example="comp-lt-1bit">A < B</a>
+        <a href="#" data-example="comp-eq-1bit">A == B</a>
+        <a href="#" data-example="comp-ne-1bit">A != B</a>
+        <a href="#" data-example="comp-ge-1bit">A >= B</a>
+        <a href="#" data-example="comp-le-1bit">A <= B</a>
+        <div class="sidenav-header">Comparadores 2-bits</div>
+        <a href="#" data-example="comp-gt-2bit">A > B</a>
+        <a href="#" data-example="comp-lt-2bit">A < B</a>
+        <a href="#" data-example="comp-eq-2bit">A == B</a>
+        <a href="#" data-example="comp-ne-2bit">A != B</a>
+        <a href="#" data-example="comp-ge-2bit">A >= B</a>
+        <a href="#" data-example="comp-le-2bit">A <= B</a>
+        <div class="sidenav-header">Circuitos Aritméticos 1-bit</div>
+        <a href="#" data-example="half-adder-1bit">Meio Somador</a>
+        <a href="#" data-example="full-adder-1bit">Somador Completo</a>
+        <a href="#" data-example="half-subtractor-1bit">Meio Subtrator</a>
+        <a href="#" data-example="full-subtractor-1bit">Subtrator Completo</a>
+    </div>
 
     <main id="main-view" class="view-container active">
         <header>

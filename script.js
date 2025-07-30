@@ -13,6 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnGerarMapa = document.getElementById('btn-gerar-mapa');
     const btnVoltar = document.getElementById('btn-voltar');
     const btnCopiarTabela = document.getElementById('btn-copiar-tabela');
+    const themeCheckbox = document.getElementById('theme-checkbox');
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const sidenav = document.getElementById('sidenav-menu');
+    const closeBtn = document.querySelector('.sidenav .closebtn');
 
     // Define constantes e variáveis globais.
     const estadosSaida = ['0', '1', 'X'];
@@ -281,30 +285,48 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${outputVarNames[outputIndex]} = ${termStrings.join(' + ')}`;
     }
 
-    function gerarTabelaVerdade() {
+    function gerarTabelaVerdade(newVarNames = null, newOutputNames = null) {
         const numVars = parseInt(numVariaveisInput.value);
         const numSaidas = parseInt(numSaidasInput.value);
 
-        while (outputVarNames.length < numSaidas) {
-            outputVarNames.push(`S${outputVarNames.length}`);
+        if (newVarNames) {
+            varNames = [...newVarNames, ...['A', 'B', 'C', 'D', 'E', 'F']].slice(0, 6);
         }
-        if (outputVarNames.length > numSaidas) {
-            outputVarNames.length = numSaidas;
+        if (newOutputNames) {
+            outputVarNames = [...newOutputNames];
+        } else {
+            const numSaidasAtual = outputVarNames.length;
+            if (numSaidas > numSaidasAtual) {
+                if (numSaidasAtual === 1 && numSaidas > 1) {
+                    const baseName = outputVarNames[0].replace(/\d+$/, '');
+                    outputVarNames[0] = `${baseName}0`;
+                }
+                const baseName = outputVarNames.length > 0 ? outputVarNames[0].replace(/\d+$/, '') : 'S';
+                for (let i = numSaidasAtual; i < numSaidas; i++) {
+                    outputVarNames.push(`${baseName}${i}`);
+                }
+            } else if (numSaidas < numSaidasAtual) {
+                outputVarNames.length = numSaidas;
+                if (outputVarNames.length === 1) {
+                    outputVarNames[0] = outputVarNames[0].replace(/\d+$/, '');
+                }
+            }
         }
 
         tabelaContainer.innerHTML = "";
         const numLinhas = Math.pow(2, numVars);
 
+        // CORREÇÃO: Adiciona a classe 'input-separator' ao último cabeçalho de variável de entrada.
         const tableHeaders = varNames.slice(0, numVars).map((v, i) => `
-            <th>
-                <span class="variable-name" data-index="${i}">${v}</span>
+            <th${i === numVars - 1 ? ' class="input-separator"' : ''}>
+                <span class="variable-name" data-index="${i}">${formatNameToSubscript(v)}</span>
                 <i class="bi bi-pencil-square edit-icon" data-index="${i}" title="Editar nome da variável"></i>
             </th>
         `).join("");
 
         const outputHeaders = outputVarNames.slice(0, numSaidas).map((outputName, i) => `
             <th>
-                <span class="variable-name" data-index="output-${i}">${outputName}</span>
+                <span class="variable-name" data-index="output-${i}">${formatNameToSubscript(outputName)}</span>
                 <i class="bi bi-pencil-square edit-icon" data-index="output-${i}" title="Editar nome da variável de saída"></i>
             </th>
         `).join("");
@@ -313,6 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
         table.innerHTML = `
             <thead>
                 <tr>
+                    <th class="row-actions"></th> <!-- Cabeçalho para a coluna de visibilidade -->
                     ${tableHeaders}
                     ${outputHeaders}
                 </tr>
@@ -320,7 +343,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <tbody>
                 ${Array.from({ length: numLinhas }, (_, i) => `
                     <tr>
-                        ${i.toString(2).padStart(numVars, "0").split("").map(bit => `<td>${bit}</td>`).join("")}
+                        <td class="row-actions">
+                            <i class="bi bi-eye toggle-visibility-btn" title="Ocultar/Mostrar linha"></i>
+                        </td>
+                        ${i.toString(2).padStart(numVars, "0").split("").map((bit, bitIndex) => `<td${bitIndex === numVars - 1 ? ' class="input-separator"' : ''}>${bit}</td>`).join("")}
                         ${Array.from({ length: numSaidas }, (_, j) => `<td class="output-cell" data-output-index="${j}" data-current-state="0">0</td>`).join("")}
                     </tr>
                 `).join("")}
@@ -335,6 +361,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 cell.classList.toggle("x-value", cell.textContent === "X");
                 cell.classList.toggle("one-value", cell.textContent === "1");
             });
+        });
+
+        // Event listener para os botões de visibilidade (usando delegação de evento)
+        table.querySelector('tbody').addEventListener('click', (event) => {
+            if (event.target.classList.contains('toggle-visibility-btn')) {
+                const icon = event.target;
+                const row = icon.closest('tr');
+                row.classList.toggle('row-hidden');
+                icon.classList.toggle('bi-eye');
+                icon.classList.toggle('bi-eye-slash');
+            }
         });
 
         table.querySelector('thead').addEventListener('click', (event) => {
@@ -1170,8 +1207,6 @@ document.addEventListener('DOMContentLoaded', () => {
         numSaidasInput.value = Math.max(parseInt(numSaidasInput.value) - 1, 1);
         gerarTabelaVerdade();
     });
-
-    btnGerarMapa.addEventListener('click', gerarMapaEExibir);
     btnVoltar.addEventListener('click', () => switchView(mainView));
 
     outputsContainer.addEventListener('click', (event) => {
@@ -1203,7 +1238,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (id.startsWith('btn-copiar-mapa-')) {
             const mapColumn = document.getElementById(`map-column-${outputIndex}`);
             const areaParaCapturar = mapColumn.querySelector('.kmap-and-expression');
-            html2canvas(areaParaCapturar, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
+            
+            // CORREÇÃO: Define a cor de fundo baseada no tema atual.
+            const isDarkMode = document.body.dataset.theme === 'dark';
+            const bgColor = isDarkMode ? '#0f172a' : '#ffffff';
+
+            html2canvas(areaParaCapturar, { backgroundColor: bgColor, useCORS: true, scale: 2 }).then(canvas => {
                 canvas.toBlob(blob => {
                     navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
                         .then(() => showCopyFeedback(button, false))
@@ -1253,9 +1293,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const originalText = btnCopiarTabela.textContent;
         btnCopiarTabela.disabled = true;
-        btnCopiarTabela.textContent = "Copiando...";
 
-        html2canvas(table, { backgroundColor: '#ffffff', useCORS: true, scale: 2 }).then(canvas => {
+        // CORREÇÃO: Clonar a tabela para remover linhas e colunas indesejadas antes de copiar
+        const tableClone = table.cloneNode(true);
+        tableClone.querySelectorAll('.row-hidden').forEach(row => row.remove());
+        tableClone.querySelectorAll('.row-actions').forEach(el => el.remove()); // Remove a coluna de ações
+
+        // Adiciona o clone ao corpo (fora da tela) para que o html2canvas possa renderizá-lo
+        tableClone.style.position = 'absolute';
+        tableClone.style.top = '-9999px';
+        tableClone.style.left = '-9999px';
+        document.body.appendChild(tableClone);
+
+        const isDarkMode = document.body.dataset.theme === 'dark';
+        const bgColor = isDarkMode ? '#1b2333' : '#ffffff'; // Cor de fundo do modo escuro ajustada
+
+        html2canvas(tableClone, { backgroundColor: bgColor, useCORS: true, scale: 2 }).then(canvas => {
             canvas.toBlob(blob => {
                 navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
                     .then(() => {
@@ -1281,27 +1334,91 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnCopiarTabela.textContent = originalText;
                 btnCopiarTabela.disabled = false;
             }, 2000);
+        }).finally(() => {
+            // Remove o clone do DOM após a operação
+            document.body.removeChild(tableClone);
         });
     });
 
-    // --- LÓGICA PARA ALTERNÂNCIA DE TEMA ---
-    const themeToggle = document.getElementById('theme-toggle');
-    const themeIcon = themeToggle.querySelector('i');
+    // --- LÓGICA PARA TABELAS PREDEFINIDAS ---
+    const predefinedTables = {
+        // Comparadores 1-bit
+        'comp-gt-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A > B'], values: ['0','0','1','0'] },
+        'comp-lt-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A < B'], values: ['0','1','0','0'] },
+        'comp-eq-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A == B'], values: ['1','0','0','1'] },
+        'comp-ne-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A != B'], values: ['0','1','1','0'] },
+        'comp-ge-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A >= B'], values: ['1','0','1','1'] },
+        'comp-le-1bit': { numVars: 2, numOutputs: 1, varNames: ['A', 'B'], outputNames: ['A <= B'], values: ['1','1','0','1'] },
+        // Comparadores 2-bit
+        'comp-gt-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A > B'], values: ['0','0','0','0','1','0','0','0','1','1','0','0','1','1','1','0'] },
+        'comp-lt-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A < B'], values: ['0','1','1','1','0','0','1','1','0','0','0','1','0','0','0','0'] },
+        'comp-eq-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A == B'], values: ['1','0','0','0','0','1','0','0','0','0','1','0','0','0','0','1'] },
+        'comp-ne-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A != B'], values: ['0','1','1','1','1','0','1','1','1','1','0','1','1','1','1','0'] },
+        'comp-ge-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A >= B'], values: ['1','0','0','0','1','1','0','0','1','1','1','0','1','1','1','1'] },
+        'comp-le-2bit': { numVars: 4, numOutputs: 1, varNames: ['A₁','A₀','B₁','B₀'], outputNames: ['A <= B'], values: ['1','1','1','1','0','1','1','1','0','0','1','1','0','0','0','1'] },
+        // Aritméticos 1-bit
+        'half-adder-1bit': { numVars: 2, numOutputs: 2, varNames: ['A','B'], outputNames: ['S','C'], values: ['0','0','1','0','1','0','0','1'] },
+        'full-adder-1bit': { numVars: 3, numOutputs: 2, varNames: ['A','B','Cᵢₙ'], outputNames: ['S','Cₒᵤₜ'], values: ['0','0','1','0','1','0','0','1','1','0','0','1','0','1','1','1'] },
+        'half-subtractor-1bit': { numVars: 2, numOutputs: 2, varNames: ['A','B'], outputNames: ['D','Bₒᵤₜ'], values: ['0','0','1','1','1','0','0','0'] },
+        'full-subtractor-1bit': { numVars: 3, numOutputs: 2, varNames: ['A','B','Bᵢₙ'], outputNames: ['D','Bₒᵤₜ'], values: ['0','0','1','1','1','0','0','0','1','1','0','0','0','0','1','1'] },
+    };
+
+    function loadPredefinedTable(exampleId) {
+        const example = predefinedTables[exampleId];
+        if (!example) return;
+
+        numVariaveisInput.value = example.numVars;
+        numSaidasInput.value = example.numOutputs;
+
+        gerarTabelaVerdade(example.varNames, example.outputNames);
+
+        const outputCells = tabelaContainer.querySelectorAll('.output-cell');
+        if (outputCells.length !== example.values.length) {
+            console.error("Discrepância entre células esperadas e geradas.");
+            return;
+        }
+
+        outputCells.forEach((cell, index) => {
+            const value = example.values[index];
+            const stateIndex = estadosSaida.indexOf(value);
+            cell.textContent = value;
+            cell.dataset.currentState = stateIndex;
+            cell.classList.toggle("x-value", value === "X");
+            cell.classList.toggle("one-value", value === "1");
+        });
+    }
+
+    // --- LÓGICA PARA MENU HAMBÚRGUER E TEMA ---
+
+    function openNav() {
+        sidenav.style.width = "300px";
+    }
+
+    function closeNav() {
+        sidenav.style.width = "0";
+    }
+
+    hamburgerBtn.addEventListener('click', openNav);
+    closeBtn.addEventListener('click', closeNav);
+
+    sidenav.addEventListener('click', (event) => {
+        const target = event.target.closest('a');
+        if (target && target.dataset.example) {
+            event.preventDefault();
+            loadPredefinedTable(target.dataset.example);
+            closeNav(); // Fecha o menu após selecionar um exemplo
+        }
+    });
+
+    btnGerarMapa.addEventListener('click', gerarMapaEExibir);
 
     const applyTheme = (theme) => {
         document.body.dataset.theme = theme;
-        if (theme === 'dark') {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        } else {
-            themeIcon.classList.remove('bi-sun-fill');
-            themeIcon.classList.add('bi-moon-fill');
-        }
+        themeCheckbox.checked = theme === 'dark';
     };
 
-    themeToggle.addEventListener('click', () => {
-        const currentTheme = document.body.dataset.theme || 'light';
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    themeCheckbox.addEventListener('change', () => {
+        const newTheme = themeCheckbox.checked ? 'dark' : 'light';
         localStorage.setItem('theme', newTheme);
         applyTheme(newTheme);
     });
