@@ -15,6 +15,7 @@
     --slate-900: #0f172a; /* Cor de cabeçalho principal */
     --slate-800: #1e293b; /* Cor de corpo de texto */
     --slate-600: #475569; /* Cor de texto secundário */
+    --slate-400: #aeb3b9; 
     --slate-300: #cbd5e1; /* Bordas suaves */
     --slate-200: #e2e8f0; /* Fundo de elementos "hover" */
     --slate-100: #f1f5f9; /* Fundo de seções */
@@ -460,7 +461,7 @@ tbody tr:hover { background-color: var(--blue-100); }
 
 .edit-icon {
     cursor: pointer;
-    color: var(--slate-400);
+    color: var(--slate-600);
     font-size: 0.9rem;
     transition: color 0.2s;
     vertical-align: middle;
@@ -489,7 +490,7 @@ thead .edit-icon:hover {
 .toggle-visibility-btn {
     cursor: pointer;
     font-size: 1.2rem;
-    color: var(--slate-400);
+    color: var(--slate-600);
     transition: color 0.2s;
 }
 
@@ -499,9 +500,9 @@ thead .edit-icon:hover {
 
 tr.row-hidden {
     opacity: 0.5;
-    background-color: var(--slate-200) !important; /* Garante que o fundo mude */
+    background-color: var(--slate-400) !important; /* Garante que o fundo mude */
     text-decoration: line-through;
-    text-decoration-color: var(--slate-400);
+    text-decoration-color: var(--slate-200);
 }
 
 /* --- PASSO 10: HEADER E MENU HAMBÚRGUER --- */
@@ -667,6 +668,7 @@ body[data-theme='dark'] {
     --slate-900: #d6eaff;
     --slate-800: #e2e8f0;
     --slate-600: #96b7e6;
+    --slate-400: #738094;
     --slate-300: #475569;
     --slate-200: #334155;
     --slate-100: #1e293b;
