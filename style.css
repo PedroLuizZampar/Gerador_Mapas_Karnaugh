@@ -280,13 +280,14 @@ tbody tr:hover { background-color: var(--blue-100); }
     align-self: center;
     justify-self: center;
 }
+
 .kmap-group {
-    border: solid;
-    border-radius: 12px;
+    border-style: solid;
     box-sizing: border-box;
-    pointer-events: none;
-    opacity: 0.8;
-    z-index: 10;
+    pointer-events: none; /* Impede que o agrupamento bloqueie cliques nas células abaixo */
+    position: relative; /* Necessário para z-index funcionar */
+    z-index: 1;
+    border-radius: 0.75rem; /* NOVO: Adiciona bordas arredondadas aos grupos */
 }
 
 /* --- PASSO 7: NOVOS CARDS PARA EXPRESSÃO E PASSOS --- */
@@ -605,14 +606,24 @@ tr.row-hidden {
     border-bottom: 1px solid var(--slate-200);
 }
 
-.theme-switch {
+.sidenav .input-mode-switcher-container {
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--slate-600);
+    border-bottom: 1px solid var(--slate-200);
+    font-size: 0.85rem;
+}
+
+.theme-switch, .input-mode-switch {
     position: relative;
     display: inline-block;
     width: 50px;
     height: 26px;
 }
 
-.theme-switch input {
+.theme-switch input, .input-mode-switch input {
     opacity: 0;
     width: 0;
     height: 0;
@@ -656,7 +667,151 @@ input:checked + .slider:before {
     border-radius: 50%;
 }
 
-/* --- PASSO 11: MODO ESCURO --- */
+/* --- PASSO 12: ESTILOS PARA MAPAS DE KARNAUGH EDITÁVEIS --- */
+
+.karnaugh-input-maps {
+    text-align: center;
+    margin: 2rem 0;
+}
+
+.karnaugh-input-maps h3 {
+    color: var(--slate-900);
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* NOVO: Estilos para o cabeçalho de edição de variáveis no modo mapa */
+.karnaugh-input-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+}
+
+/* NOVO: Estilos para os grupos de variáveis (Entradas/Saídas) */
+.variable-group-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.variable-group-label {
+    font-weight: 600;
+    color: var(--slate-800);
+}
+
+.variable-group {
+    display: flex;
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
+
+.variable-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--slate-600);
+    color: var(--white);
+    padding: 0.5rem 1rem;
+    border-right: 1px solid var(--slate-500); /* Separador interno */
+}
+
+.variable-cell:last-child {
+    border-right: none;
+}
+
+.variable-cell .variable-name {
+    margin-right: 0;
+    color: var(--white);
+}
+
+.variable-cell .edit-icon {
+    color: var(--slate-300);
+    font-size: 0.9rem;
+}
+
+.variable-cell .edit-icon:hover {
+    color: var(--white);
+}
+
+.karnaugh-input-maps p {
+    color: var(--slate-600);
+    font-size: 1rem;
+    margin-bottom: 2rem;
+}
+
+.input-map-section {
+    margin: 0 auto 3rem auto;
+    padding: 1.5rem;
+    background-color: var(--slate-100);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--slate-200);
+    max-width: 900px;
+}
+
+.input-map-section h4 {
+    color: var(--slate-800);
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.input-kmap-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.input-kmap {
+    font-family: var(--font-mono);
+    color: var(--kmap-header-color);
+    font-weight: bold;
+    margin: 15px;
+}
+
+.editable-cell {
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+    user-select: none;
+}
+
+editable-cell:hover {
+    background-color: var(--blue-100);
+}
+
+.editable-cell:active {
+    transform: scale(0.95);
+}
+
+.truth-table-card {
+    background-color: var(--slate-100);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    border: 1px solid var(--slate-200);
+    margin-bottom: 20px;
+}
+
+.truth-table-card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    color: var(--slate-900);
+    border-bottom: 1px solid var(--slate-300);
+    padding-bottom: 0.75rem;
+}
+
+.truth-table-card div {
+    margin: 0 0 2rem 0;
+}
+
+#truth-table-container {
+    overflow-x: auto;
+    padding-bottom: 1rem;
+}
+
+/* --- PASSO 13: MODO ESCURO PARA MAPAS EDITÁVEIS --- */
 
 /* Variáveis de cor para o modo escuro */
 body[data-theme='dark'] {

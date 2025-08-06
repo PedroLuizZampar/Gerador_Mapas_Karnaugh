@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnVoltar = document.getElementById('btn-voltar');
     const btnCopiarTabela = document.getElementById('btn-copiar-tabela');
     const themeCheckbox = document.getElementById('theme-checkbox');
+    const inputModeCheckbox = document.getElementById('input-mode-checkbox');
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const sidenav = document.getElementById('sidenav-menu');
     const closeBtn = document.querySelector('.sidenav .closebtn');
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let outputVarNames = ['S']; // Array para múltiplas saídas
     const GROUP_COLORS = ['#f7685eff', '#61b2f5ff', '#83d485ff', '#ebc85eff', '#c16fcfff', '#eb7dbdff', '#7ed3d3ff', '#e08164ff'];
     let simplificationStepsLog = [];
+    let isKarnaughInputMode = false; // Controla o modo de entrada
 
     /**
      * Converte os dígitos e as strings "in"/"out" para seus equivalentes em subscrito (Unicode).
@@ -51,6 +53,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const gerarMapaEExibir = () => {
+        if (isKarnaughInputMode) {
+            // Modo Karnaugh: usar valores dos mapas editáveis
+            gerarResultadosDoModoKarnaugh();
+        } else {
+            // Modo Tabela Verdade: usar valores da tabela
+            gerarResultadosDoModoTabela();
+        }
+    };
+
+    const gerarResultadosDoModoTabela = () => {
         const numVars = parseInt(numVariaveisInput.value);
         const numSaidas = parseInt(numSaidasInput.value);
         const allOutputsValues = lerValoresTabela();
@@ -64,12 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
             outputSection.className = 'output-section';
             outputSection.innerHTML = `
                 <div class="output-header">
-                    <h2>Resultados para: ${outputVarNames[i] || `S${i}`}</h2>
+                    <h2>Resultados para: ${formatNameToSubscript(outputVarNames[i] || `S${i}`)}</h2>
                 </div>
                 <div class="results-wrapper">
                     <div class="results-column" id="map-column-${i}">
                         <div class="kmap-and-expression">
-                            <div id="kmap-container-${i}"></div>
+                            <div id="kmap-container-${i}" class="kmap-output-container"></div>
                         </div>
                         <div class="action-buttons">
                             <button id="btn-copiar-mapa-${i}" class="btn-secondary">Copiar Mapa</button>
@@ -104,6 +116,268 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView(mapView);
     };
 
+    const gerarResultadosDoModoKarnaugh = () => {
+        const numVars = parseInt(numVariaveisInput.value);
+        const numSaidas = parseInt(numSaidasInput.value);
+
+        if (outputsContainer) {
+            outputsContainer.innerHTML = '';
+        }
+
+        for (let i = 0; i < numSaidas; i++) {
+            const outputSection = document.createElement('div');
+            outputSection.className = 'output-section';
+            // MODIFICADO: Inverti a ordem das colunas e ajustei os IDs/classes para o layout 50/50.
+            outputSection.innerHTML = `
+                <div class="output-header">
+                    <h2>Resultados para: ${formatNameToSubscript(outputVarNames[i] || `S${i}`)}</h2>
+                </div>
+                <div class="results-wrapper">
+                    <div class="results-column" id="table-column-${i}" style="flex: 1 1 50%;">
+                        <div class="truth-table-card">
+                            <h2>Tabela Verdade</h2>
+                            <div id="truth-table-container-${i}"></div>
+                            <div class="action-buttons">
+                                <button id="btn-copiar-tabela-${i}" class="btn-secondary">Copiar Tabela</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="results-column" id="expression-column-${i}" style="flex: 1 1 50%;">
+                        <div class="expression-card">
+                            <h2>Expressão Simplificada</h2>
+                            <div class="expression-content">
+                                <p id="simplified-expression-${i}">S = ?</p>
+                                <button id="btn-copy-main-expression-${i}" class="copy-icon-button" title="Copiar Expressão" style="display: none;">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="steps-card">
+                            <h2>Passo a Passo da Simplificação</h2>
+                            <div id="simplification-steps-container-${i}"></div>
+                            <div class="action-buttons steps-action">
+                                <button id="btn-copy-steps-${i}" class="btn-secondary" style="display: none;">Copiar Passos</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            outputsContainer.appendChild(outputSection);
+            
+            const kmapValues = window.inputKmapValues[i] || new Array(Math.pow(2, numVars)).fill('0');
+            gerarResultadoParaSaidaKarnaugh(numVars, kmapValues, i);
+        }
+        
+        switchView(mapView);
+    };
+
+    function gerarResultadoParaSaidaKarnaugh(numVars, kmapValues, outputIndex) {
+        const currentSimplificationSteps = [];
+        const stepsContainer = document.getElementById(`simplification-steps-container-${outputIndex}`);
+        const btnCopySteps = document.getElementById(`btn-copy-steps-${outputIndex}`);
+        const expressionElement = document.getElementById(`simplified-expression-${outputIndex}`);
+        const btnCopyMainExpression = document.getElementById(`btn-copy-main-expression-${outputIndex}`);
+        const truthTableContainer = document.getElementById(`truth-table-container-${outputIndex}`);
+
+        // Gerar tabela verdade a partir dos valores do mapa
+        gerarTabelaVerdadeParaSaida(numVars, kmapValues, outputIndex);
+
+        stepsContainer.style.display = 'none';
+        btnCopySteps.style.display = 'none';
+        stepsContainer.innerHTML = '';
+
+        const { kmapMatrices, gridConfig } = gerarMatrizesKmap(numVars, kmapValues);
+        
+        try {
+            const { finalGroups, expression } = simplificar(numVars, kmapMatrices);
+
+            expressionElement.innerHTML = `${outputVarNames[outputIndex]} = ?`;
+            btnCopyMainExpression.style.display = 'none';
+            
+            if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
+                expressionElement.innerHTML = `${outputVarNames[outputIndex]} = ${expression || '0'}`;
+                renderizarPassos(outputIndex, []);
+                return;
+            }
+            
+            let stepCounter = 0;
+            let currentTerms = finalGroups.map((group, i) => ({
+                term: getTermForGroup(numVars, group),
+                color: GROUP_COLORS[i % GROUP_COLORS.length]
+            }));
+
+            currentSimplificationSteps.push({
+                title: `Passo ${stepCounter++}: Expressão Inicial (Soma de Produtos)`,
+                termsWithMeta: [...currentTerms],
+                plainExpression: formatExpressionFromTerms(currentTerms, outputIndex),
+                explanation: 'Esta é a expressão booleana simplificada, obtida diretamente dos agrupamentos no mapa. As cores correspondem aos grupos. A partir daqui, aplicaremos regras algébricas para simplificar ainda mais.'
+            });
+
+            let changedInLoop = true;
+            while(changedInLoop) {
+                let somethingChangedThisCycle = false;
+
+                const factorResult = processOneFactoringStep(currentTerms);
+                if (factorResult.changed) {
+                    currentSimplificationSteps.push({
+                        title: `Passo ${stepCounter++}: Fatoração (Termo em Evidência)`,
+                        termsWithMeta: factorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(factorResult.newTerms, outputIndex),
+                        explanation: factorResult.explanation
+                    });
+                    currentTerms = factorResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
+                }
+
+                const xorResult = processOneXorStep(currentTerms);
+                if (xorResult.changed) {
+                    currentSimplificationSteps.push({
+                        title: `Passo ${stepCounter++}: Simplificação (Porta XOR/XNOR)`,
+                        termsWithMeta: xorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(xorResult.newTerms, outputIndex),
+                        explanation: xorResult.explanation
+                    });
+                    currentTerms = xorResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
+                }
+
+                const complexFactorResult = processFactoringWithComplexTerms(currentTerms);
+                if (complexFactorResult.changed) {
+                    currentSimplificationSteps.push({
+                        title: `Passo ${stepCounter++}: Fatoração (Termo Complexo)`,
+                        termsWithMeta: complexFactorResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(complexFactorResult.newTerms, outputIndex),
+                        explanation: complexFactorResult.explanation
+                    });
+                    currentTerms = complexFactorResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
+                }
+
+                const compoundResult = processOneCompoundStep(currentTerms);
+                if (compoundResult.changed) {
+                    currentSimplificationSteps.push({
+                        title: `Passo ${stepCounter++}: Simplificação (Associativa)`,
+                        termsWithMeta: compoundResult.newTerms,
+                        plainExpression: formatExpressionFromTerms(compoundResult.newTerms, outputIndex),
+                        explanation: compoundResult.explanation
+                    });
+                    currentTerms = compoundResult.newTerms;
+                    somethingChangedThisCycle = true;
+                    continue;
+                }
+
+                if (!somethingChangedThisCycle) {
+                    changedInLoop = false;
+                }
+            }
+
+            let finalDisplayTerms = [...currentTerms];
+
+            const needsXnorConversion = currentTerms.some(t => t.term.includes("⊕") && t.term.includes(")'"));
+
+            if (needsXnorConversion) {
+                finalDisplayTerms = currentTerms.map(t => ({ ...t, term: formatWithXNOR(t.term) }));
+
+                currentSimplificationSteps.push({
+                    title: `Passo ${stepCounter++}: Conversão para Notação XNOR (⊙)`,
+                    termsWithMeta: [...finalDisplayTerms],
+                    plainExpression: formatExpressionFromTerms(finalDisplayTerms, outputIndex),
+                    explanation: "Para uma representação final mais limpa, convertemos a notação XNOR da forma (P ⊕ Q)' para a forma P ⊙ Q."
+                });
+            }
+
+            expressionElement.innerHTML = `${formatNameToSubscript(outputVarNames[outputIndex])} = ${formatExpressionHTML(finalDisplayTerms, false)}`;
+            btnCopyMainExpression.style.display = 'inline-flex';
+
+            renderizarPassos(outputIndex, currentSimplificationSteps);
+
+        } catch (e) {
+            console.error(`Erro durante a simplificação para a saída ${outputIndex}:`, e);
+            expressionElement.textContent = `${outputVarNames[outputIndex]} = Erro na simplificação`;
+        }
+    }
+
+    function gerarTabelaVerdadeParaSaida(numVars, kmapValues, outputIndex) {
+        const container = document.getElementById(`truth-table-container-${outputIndex}`);
+        const numLinhas = Math.pow(2, numVars);
+
+        const table = document.createElement("table");
+        table.style.margin = "0 auto";
+        
+        // Cabeçalho da tabela
+        const tableHeaders = varNames.slice(0, numVars).map((v, i) => `
+            <th${i === numVars - 1 ? ' class="input-separator"' : ''}>${formatNameToSubscript(v)}</th>
+        `).join("");
+
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th class="row-actions"></th> <!-- NOVO: Cabeçalho para a coluna de visibilidade -->
+                    ${tableHeaders}
+                    <th>${formatNameToSubscript(outputVarNames[outputIndex])}</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        `;
+
+        const tbody = table.querySelector('tbody');
+
+        // Gerar linhas da tabela
+        for (let i = 0; i < numLinhas; i++) {
+            const binaryString = i.toString(2).padStart(numVars, '0');
+            const row = document.createElement('tr');
+
+            // NOVO: Adiciona a célula de ação com o botão de visibilidade
+            const actionCell = document.createElement('td');
+            actionCell.className = 'row-actions';
+            actionCell.innerHTML = `<i class="bi bi-eye toggle-visibility-btn" title="Ocultar/Mostrar linha"></i>`;
+            row.appendChild(actionCell);
+            
+            // Colunas de entrada
+            for (let j = 0; j < numVars; j++) {
+                const cell = document.createElement('td');
+                cell.textContent = binaryString[j];
+                // Adiciona a classe separadora à última célula de entrada
+                if (j === numVars - 1) {
+                    cell.classList.add('input-separator');
+                }
+                row.appendChild(cell);
+            }
+            
+            // Coluna de saída
+            const outputCell = document.createElement('td');
+            const outputValue = kmapValues[i] || '0';
+            outputCell.textContent = outputValue;
+            outputCell.className = 'output-cell';
+            if (outputValue === 'X') {
+                outputCell.classList.add('x-value');
+            } else if (outputValue === '1') {
+                outputCell.classList.add('one-value');
+            }
+            row.appendChild(outputCell);
+            
+            tbody.appendChild(row);
+        }
+
+        container.innerHTML = '';
+        container.appendChild(table);
+
+        // NOVO: Adiciona o event listener para os botões de visibilidade na tabela gerada
+        table.querySelector('tbody').addEventListener('click', (event) => {
+            if (event.target.classList.contains('toggle-visibility-btn')) {
+                const icon = event.target;
+                const row = icon.closest('tr');
+                row.classList.toggle('row-hidden');
+                icon.classList.toggle('bi-eye');
+                icon.classList.toggle('bi-eye-slash');
+            }
+        });
+    }
+
     function gerarResultadoParaSaida(numVars, truthTableValues, outputIndex) {
         const currentSimplificationSteps = []; // Use a local variable for steps
         const stepsContainer = document.getElementById(`simplification-steps-container-${outputIndex}`);
@@ -118,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { kmapMatrices, gridConfig } = gerarMatrizesKmap(numVars, truthTableValues);
         
-        desenharMapaK(numVars, kmapMatrices, gridConfig, outputIndex);
+        desenharMapaK(numVars, kmapMatrices, gridConfig, outputIndex, false, 'output');
         
         try {
             const { finalGroups, expression } = simplificar(numVars, kmapMatrices);
@@ -128,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (expression === "0" || expression === "1" || !finalGroups || finalGroups.length === 0) {
                 expressionElement.innerHTML = `${outputVarNames[outputIndex]} = ${expression || '0'}`;
-                desenharGrupos(finalGroups || [], gridConfig, outputIndex);
+                desenharGrupos(finalGroups || [], gridConfig, outputIndex, 'output');
                 renderizarPassos(outputIndex, []); // Render with no steps
                 return;
             }
@@ -222,9 +496,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            expressionElement.innerHTML = `${outputVarNames[outputIndex]} = ${formatExpressionHTML(finalDisplayTerms, false)}`;
+            expressionElement.innerHTML = `${formatNameToSubscript(outputVarNames[outputIndex])} = ${formatExpressionHTML(finalDisplayTerms, false)}`;
             btnCopyMainExpression.style.display = 'inline-flex';
-            desenharGrupos(finalGroups, gridConfig, outputIndex);
+            desenharGrupos(finalGroups, gridConfig, outputIndex, 'output');
 
             renderizarPassos(outputIndex, currentSimplificationSteps);
 
@@ -271,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatExpressionHTML(terms, useColors = true) {
         const termStrings = terms.map(meta => {
-            const termText = meta.term.replace(/'/g, '’');
+            const termText = formatNameToSubscript(meta.term.replace(/'/g, '’'));
             if (useColors && meta.color) {
                 return `<span style="color: ${meta.color}; font-weight: 700;">${termText}</span>`;
             }
@@ -282,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatExpressionFromTerms(terms, outputIndex) {
         const termStrings = terms.map(t => t.term);
-        return `${outputVarNames[outputIndex]} = ${termStrings.join(' + ')}`;
+        return `${formatNameToSubscript(outputVarNames[outputIndex])} = ${termStrings.map(formatNameToSubscript).join(' + ')}`;
     }
 
     function gerarTabelaVerdade(newVarNames = null, newOutputNames = null) {
@@ -385,9 +659,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const newName = prompt(`Editar nome da variável de saída "${oldName}":`, oldName);
                     if (newName && newName.trim() && newName.trim() !== oldName) {
                         const plainName = newName.trim().substring(0, 10);
-                        const finalName = formatNameToSubscript(plainName);
-                        outputVarNames[outputIndex] = finalName;
-                        span.textContent = finalName;
+                        // MODIFICADO: Armazena o nome simples, a formatação ocorrerá na renderização.
+                        outputVarNames[outputIndex] = plainName;
+                        span.innerHTML = formatNameToSubscript(plainName);
                     }
                 } else {
                     const numericIndex = parseInt(indexAttr);
@@ -395,9 +669,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const newName = prompt(`Editar nome da variável "${oldName}":`, oldName);
                     if (newName && newName.trim() && newName.trim() !== oldName) {
                         const plainName = newName.trim().substring(0, 10);
-                        const finalName = formatNameToSubscript(plainName);
-                        varNames[numericIndex] = finalName;
-                        span.textContent = finalName;
+                        // MODIFICADO: Armazena o nome simples, a formatação ocorrerá na renderização.
+                        varNames[numericIndex] = plainName;
+                        span.innerHTML = formatNameToSubscript(plainName);
                     }
                 }
             }
@@ -418,18 +692,32 @@ document.addEventListener('DOMContentLoaded', () => {
         outputCells.forEach((cell) => {
             const outputIndex = parseInt(cell.dataset.outputIndex);
             const value = cell.textContent;
-            outputs[outputIndex].push(value);
+            // CORREÇÃO: Garante que o array de saída exista antes de adicionar um valor.
+            if (outputs[outputIndex]) {
+                outputs[outputIndex].push(value);
+            }
         });
 
         return outputs;
     }
 
     function getKmapGridConfig(numVars) {
-        if (numVars === 2) return { rows: 2, cols: 2, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1]] };
-        if (numVars === 3) return { rows: 2, cols: 4, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1], varNames[2]] };
-        if (numVars === 4) return { rows: 4, cols: 4, numSubGrids: 1, varsLeft: [varNames[0], varNames[1]], varsTop: [varNames[2], varNames[3]] };
-        if (numVars === 5) return { rows: 4, cols: 4, numSubGrids: 2, varsSub: [varNames[0]], varsLeft: [varNames[1], varNames[2]], varsTop: [varNames[3], varNames[4]] };
-        if (numVars === 6) return { rows: 4, cols: 4, numSubGrids: 4, varsSub: [varNames[0], varNames[1]], varsLeft: [varNames[2], varNames[3]], varsTop: [varNames[4], varNames[5]] };
+        // CORREÇÃO: Adiciona os cabeçalhos (rowHeaders, colHeaders) ao objeto de configuração.
+        const grayCode = (n) => {
+            if (n === 0) return [''];
+            if (n === 1) return ['0', '1'];
+            const prev = grayCode(n - 1);
+            const result = [];
+            for (let i = 0; i < prev.length; i++) result.push('0' + prev[i]);
+            for (let i = prev.length - 1; i >= 0; i--) result.push('1' + prev[i]);
+            return result;
+        };
+
+        if (numVars === 2) return { rows: 2, cols: 2, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1]], rowHeaders: ['0', '1'], colHeaders: ['0', '1'] };
+        if (numVars === 3) return { rows: 2, cols: 4, numSubGrids: 1, varsLeft: [varNames[0]], varsTop: [varNames[1], varNames[2]], rowHeaders: ['0', '1'], colHeaders: ['00', '01', '11', '10'] };
+        if (numVars === 4) return { rows: 4, cols: 4, numSubGrids: 1, varsLeft: [varNames[0], varNames[1]], varsTop: [varNames[2], varNames[3]], rowHeaders: ['00', '01', '11', '10'], colHeaders: ['00', '01', '11', '10'] };
+        if (numVars === 5) return { rows: 4, cols: 4, numSubGrids: 2, varsSub: [varNames[0]], varsLeft: [varNames[1], varNames[2]], varsTop: [varNames[3], varNames[4]], rowHeaders: ['00', '01', '11', '10'], colHeaders: ['00', '01', '11', '10'] };
+        if (numVars === 6) return { rows: 4, cols: 4, numSubGrids: 4, varsSub: [varNames[0], varNames[1]], varsLeft: [varNames[2], varNames[3]], varsTop: [varNames[4], varNames[5]], rowHeaders: ['00', '01', '11', '10'], colHeaders: ['00', '01', '11', '10'] };
         return {};
     }
 
@@ -437,37 +725,183 @@ document.addEventListener('DOMContentLoaded', () => {
     function kmapPosToTTIndex(pos, numVars) { let bin = ""; const grayCode = [0, 1, 3, 2]; switch (numVars) { case 2: bin = `${pos.row.toString(2)}${pos.col.toString(2)}`; break; case 3: bin = `${pos.row.toString(2)}${grayCode[pos.col].toString(2).padStart(2, "0")}`; break; case 4: bin = `${grayCode[pos.row].toString(2).padStart(2, "0")}${grayCode[pos.col].toString(2).padStart(2, "0")}`; break; case 5: bin = `${pos.grid.toString(2)}${grayCode[pos.row].toString(2).padStart(2, "0")}${grayCode[pos.col].toString(2).padStart(2, "0")}`; break; case 6: bin = `${grayCode[pos.grid].toString(2).padStart(2, "0")}${grayCode[pos.row].toString(2).padStart(2, "0")}${grayCode[pos.col].toString(2).padStart(2, "0")}`; break } return parseInt(bin, 2) }
     function gerarMatrizesKmap(numVars, values) { const gridConfig = getKmapGridConfig(numVars); if (!gridConfig.rows) return { kmapMatrices: [], gridConfig: {} }; const kmapMatrices = Array.from({ length: gridConfig.numSubGrids }, () => Array(gridConfig.rows).fill(null).map(() => Array(gridConfig.cols).fill(null))); values.forEach((val, index) => { const pos = ttIndexToKmapPos(index, numVars); if (kmapMatrices[pos.grid]?.[pos.row] !== undefined) { kmapMatrices[pos.grid][pos.row][pos.col] = val } }); return { kmapMatrices, gridConfig } }
     
-    function desenharMapaK(numVars, kmapMatrices, gridConfig, outputIndex) {
-        const kmapContainer = document.getElementById(`kmap-container-${outputIndex}`);
+    function desenharMapaK(numVars, kmapMatrices, gridConfig, outputIndex, isEditable = false, targetType = 'output') {
+        const kmapContainer = isEditable 
+            ? document.getElementById(`input-kmap-${outputIndex}`)
+            : document.getElementById(`kmap-container-${outputIndex}`);
+
         kmapContainer.innerHTML = "";
         if (!gridConfig.rows) return;
         const mainWrapper = document.createElement("div");
         kmapContainer.appendChild(mainWrapper);
-        const buildMapGrid = (matrix, gridIndex, vars) => { const { varsLeft, varsTop } = vars; const hasSplitLeft = varsLeft.length > 1; const hasSplitTop = varsTop.length > 1; const leftHeaderCols = varsLeft.length > 0 ? 1 : 0; const headerRows = varsTop.length > 0 ? 1 : 0; const totalRows = headerRows + gridConfig.rows + (hasSplitTop ? 1 : 0); const totalCols = leftHeaderCols + gridConfig.cols + (hasSplitLeft ? 1 : 0); const mapContainer = document.createElement("div"); mapContainer.className = "kmap-sub-grid-container"; const kmap = document.createElement("div"); kmap.className = "kmap"; kmap.id = `kmap-grid-${outputIndex}-${gridIndex}`; kmap.style.display = "grid"; kmap.style.gridTemplateRows = `repeat(${totalRows}, auto)`; kmap.style.gridTemplateColumns = `repeat(${totalCols}, auto)`; const corner = document.createElement("div"); corner.style.gridArea = `1 / 1 / ${headerRows + 1} / ${leftHeaderCols + 1}`; kmap.appendChild(corner); if (varsTop.length > 0) { const mainVar = varsTop[0]; const labels = [`${mainVar}'`, mainVar]; const colSpan = gridConfig.cols / labels.length; labels.forEach((label, i) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.gridArea = `1 / ${leftHeaderCols + 1 + i * colSpan} / 2 / ${leftHeaderCols + 1 + (i * colSpan + colSpan)}`; kmap.appendChild(h) }) }
-        if (hasSplitTop) { const subVar = varsTop[1]; const subLabels = [`${subVar}'`, subVar, subVar, `${subVar}'`]; const bottomRowGridStart = headerRows + gridConfig.rows + 1; subLabels.forEach((label, i) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.gridArea = `${bottomRowGridStart} / ${leftHeaderCols + 1 + i} / ${bottomRowGridStart + 1} / ${leftHeaderCols + 2 + i}`; kmap.appendChild(h) }) }
-        if (varsLeft.length > 0) { const mainVar = varsLeft[0]; const labels = [`${mainVar}'`, mainVar]; const rowSpan = gridConfig.rows / labels.length; labels.forEach((label, i) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.gridArea = `${headerRows + 1 + i * rowSpan} / 1 / ${headerRows + 1 + (i * rowSpan + rowSpan)} / 2`; kmap.appendChild(h) }) }
-        if (hasSplitLeft) { const subVar = varsLeft[1]; const subLabels = [`${subVar}'`, subVar, subVar, `${subVar}'`]; const rightHeaderColStart = leftHeaderCols + gridConfig.cols + 1; subLabels.forEach((label, r) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.gridArea = `${headerRows + 1 + r} / ${rightHeaderColStart} / ${headerRows + 2 + r} / ${rightHeaderColStart + 1}`; kmap.appendChild(h) }) }
-        matrix.forEach((rowData, r) => { rowData.forEach((cellData, c) => { const cell = document.createElement("div"); cell.className = "kmap-cell"; if (cellData === "X") cell.classList.add("x-value"); if (cellData === "1") cell.classList.add("one-value"); cell.textContent = cellData; cell.style.gridArea = `${headerRows + 1 + r} / ${leftHeaderCols + 1 + c} / ${headerRows + 2 + r} / ${leftHeaderCols + 2 + c}`; kmap.appendChild(cell) }) }); mapContainer.appendChild(kmap); return mapContainer }; if (numVars <= 4) { mainWrapper.appendChild(buildMapGrid(kmapMatrices[0], 0, gridConfig)) } else if (numVars === 5) { mainWrapper.style.display = "flex"; mainWrapper.style.alignItems = "center"; mainWrapper.style.gap = "20px"; const divA0 = document.createElement("div"); const divA1 = document.createElement("div"); divA0.innerHTML = `<h3>${gridConfig.varsSub[0]}'</h3>`; divA1.innerHTML = `<h3>${gridConfig.varsSub[0]}</h3>`; divA0.appendChild(buildMapGrid(kmapMatrices[0], 0, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop })); divA1.appendChild(buildMapGrid(kmapMatrices[1], 1, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop })); mainWrapper.append(divA0, divA1) } else if (numVars === 6) { mainWrapper.style.display = "grid"; mainWrapper.style.gridTemplateColumns = "auto auto auto"; mainWrapper.style.gridTemplateRows = "auto auto auto"; mainWrapper.style.gap = "5px 15px"; mainWrapper.style.alignItems = "center"; mainWrapper.style.justifyItems = "center"; const mainGridVarV = gridConfig.varsSub[0]; const mainGridVarH = gridConfig.varsSub[1]; const corner = document.createElement("div"); corner.style.gridArea = "1 / 1"; mainWrapper.appendChild(corner); const topLabels = [`${mainGridVarH}'`, mainGridVarH]; topLabels.forEach((label, i) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.gridArea = `1 / ${2 + i}`; mainWrapper.appendChild(h) }); const leftLabels = [`${mainGridVarV}'`, mainGridVarV]; leftLabels.forEach((label, i) => { const h = document.createElement("div"); h.className = "kmap-header"; h.textContent = label; h.style.padding = "10px"; h.style.gridArea = `${2 + i} / 1`; mainWrapper.appendChild(h) }); const placement = { "0": "2 / 2", "1": "2 / 3", "3": "3 / 2", "2": "3 / 3" }; kmapMatrices.forEach((matrix, index) => { const map = buildMapGrid(matrix, index, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop }); map.style.gridArea = placement[index]; mainWrapper.appendChild(map) }) }
+
+        const buildMapGrid = (matrix, gridIndex, vars) => {
+            const { varsLeft, varsTop } = vars;
+            const hasSplitLeft = varsLeft.length > 1;
+            const hasSplitTop = varsTop.length > 1;
+            const leftHeaderCols = varsLeft.length > 0 ? 1 : 0;
+            const headerRows = varsTop.length > 0 ? 1 : 0;
+            const totalRows = headerRows + gridConfig.rows + (hasSplitTop ? 1 : 0);
+            const totalCols = leftHeaderCols + gridConfig.cols + (hasSplitLeft ? 1 : 0);
+            const mapContainer = document.createElement("div");
+            mapContainer.className = "kmap-sub-grid-container";
+            const kmap = document.createElement("div");
+            kmap.className = "kmap";
+            kmap.id = `${targetType}-kmap-grid-${outputIndex}-${gridIndex}`;
+            kmap.style.display = "grid";
+            kmap.style.gridTemplateRows = `repeat(${totalRows}, auto)`;
+            kmap.style.gridTemplateColumns = `repeat(${totalCols}, auto)`;
+            const corner = document.createElement("div");
+            corner.style.gridArea = `1 / 1 / ${headerRows + 1} / ${leftHeaderCols + 1}`;
+            kmap.appendChild(corner);
+            if (varsTop.length > 0) {
+                const mainVar = varsTop[0];
+                // MODIFICADO: Aplica a formatação de subscrito.
+                const labels = [`${formatNameToSubscript(mainVar)}'`, formatNameToSubscript(mainVar)];
+                const colSpan = gridConfig.cols / labels.length;
+                labels.forEach((label, i) => {
+                    const h = document.createElement("div");
+                    h.className = "kmap-header";
+                    h.innerHTML = label; // Usa innerHTML para renderizar o subscrito
+                    h.style.gridArea = `1 / ${leftHeaderCols + 1 + i * colSpan} / 2 / ${leftHeaderCols + 1 + (i * colSpan + colSpan)}`;
+                    kmap.appendChild(h)
+                })
+            }
+            if (hasSplitTop) {
+                const subVar = varsTop[1];
+                // MODIFICADO: Aplica a formatação de subscrito.
+                const subLabels = [`${formatNameToSubscript(subVar)}'`, formatNameToSubscript(subVar), formatNameToSubscript(subVar), `${formatNameToSubscript(subVar)}'`];
+                const bottomRowGridStart = headerRows + gridConfig.rows + 1;
+                subLabels.forEach((label, i) => {
+                    const h = document.createElement("div");
+                    h.className = "kmap-header";
+                    h.innerHTML = label; // Usa innerHTML
+                    h.style.gridArea = `${bottomRowGridStart} / ${leftHeaderCols + 1 + i} / ${bottomRowGridStart + 1} / ${leftHeaderCols + 2 + i}`;
+                    kmap.appendChild(h)
+                })
+            }
+            if (varsLeft.length > 0) {
+                const mainVar = varsLeft[0];
+                // MODIFICADO: Aplica a formatação de subscrito.
+                const labels = [`${formatNameToSubscript(mainVar)}'`, formatNameToSubscript(mainVar)];
+                const rowSpan = gridConfig.rows / labels.length;
+                labels.forEach((label, i) => {
+                    const h = document.createElement("div");
+                    h.className = "kmap-header";
+                    h.innerHTML = label; // Usa innerHTML
+                    h.style.gridArea = `${headerRows + 1 + i * rowSpan} / 1 / ${headerRows + 1 + (i * rowSpan + rowSpan)} / 2`;
+                    kmap.appendChild(h)
+                })
+            }
+            if (hasSplitLeft) {
+                const subVar = varsLeft[1];
+                // MODIFICADO: Aplica a formatação de subscrito.
+                const subLabels = [`${formatNameToSubscript(subVar)}'`, formatNameToSubscript(subVar), formatNameToSubscript(subVar), `${formatNameToSubscript(subVar)}'`];
+                const rightHeaderColStart = leftHeaderCols + gridConfig.cols + 1;
+                subLabels.forEach((label, r) => {
+                    const h = document.createElement("div");
+                    h.className = "kmap-header";
+                    h.innerHTML = label; // Usa innerHTML
+                    h.style.gridArea = `${headerRows + 1 + r} / ${rightHeaderColStart} / ${headerRows + 2 + r} / ${rightHeaderColStart + 1}`;
+                    kmap.appendChild(h)
+                })
+            }
+            matrix.forEach((rowData, r) => {
+                rowData.forEach((cellData, c) => {
+                    const cell = document.createElement("div");
+                    cell.className = "kmap-cell";
+                    if (cellData === "X") cell.classList.add("x-value");
+                    if (cellData === "1") cell.classList.add("one-value");
+                    cell.textContent = cellData;
+                    cell.style.gridArea = `${headerRows + 1 + r} / ${leftHeaderCols + 1 + c} / ${headerRows + 2 + r} / ${leftHeaderCols + 2 + c}`;
+                    if(isEditable){
+                        cell.classList.add("editable-cell");
+                        const currentR=r; const currentC=c; const currentGrid=gridIndex;
+                        cell.addEventListener('click', ()=>{toggleCellValue(cell, currentR, currentC, currentGrid, numVars, outputIndex);});
+                    }
+                    kmap.appendChild(cell)
+                })
+            });
+            mapContainer.appendChild(kmap);
+            return mapContainer
+        };
+
+        if (numVars <= 4) {
+            mainWrapper.appendChild(buildMapGrid(kmapMatrices[0], 0, gridConfig))
+        } else if (numVars === 5) {
+            const divA0 = document.createElement("div");
+            const divA1 = document.createElement("div");
+            const header0 = document.createElement("div");
+            header0.className = "kmap-header";
+            // MODIFICADO: Aplica a formatação de subscrito.
+            header0.innerHTML = `${formatNameToSubscript(gridConfig.varsSub[0])}'`;
+            divA0.appendChild(header0);
+            const header1 = document.createElement("div");
+            header1.className = "kmap-header";
+            // MODIFICADO: Aplica a formatação de subscrito.
+            header1.innerHTML = `${formatNameToSubscript(gridConfig.varsSub[0])}`;
+            divA1.appendChild(header1);
+            divA0.appendChild(buildMapGrid(kmapMatrices[0], 0, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop }));
+            divA1.appendChild(buildMapGrid(kmapMatrices[1], 1, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop }));
+            mainWrapper.append(divA0, divA1)
+        } else if (numVars === 6) {
+            mainWrapper.style.display = "grid";
+            mainWrapper.style.gridTemplateColumns = "auto auto auto";
+            mainWrapper.style.gridTemplateRows = "auto auto auto";
+            mainWrapper.style.gap = "5px 15px";
+            mainWrapper.style.alignItems = "center";
+            mainWrapper.style.justifyItems = "center";
+            const mainGridVarV = gridConfig.varsSub[0];
+            const mainGridVarH = gridConfig.varsSub[1];
+            const corner = document.createElement("div");
+            corner.style.gridArea = "1 / 1";
+            mainWrapper.appendChild(corner);
+            // MODIFICADO: Aplica a formatação de subscrito.
+            const topLabels = [`${formatNameToSubscript(mainGridVarH)}'`, formatNameToSubscript(mainGridVarH)];
+            topLabels.forEach((label, i) => {
+                const h = document.createElement("div");
+                h.className = "kmap-header";
+                h.innerHTML = label; // Usa innerHTML
+                h.style.gridArea = `1 / ${2 + i}`;
+                mainWrapper.appendChild(h)
+            });
+            // MODIFICADO: Aplica a formatação de subscrito.
+            const leftLabels = [`${formatNameToSubscript(mainGridVarV)}'`, formatNameToSubscript(mainGridVarV)];
+            leftLabels.forEach((label, i) => {
+                const h = document.createElement("div");
+                h.className = "kmap-header";
+                h.innerHTML = label; // Usa innerHTML
+                h.style.padding = "10px";
+                h.style.gridArea = `${2 + i} / 1`;
+                mainWrapper.appendChild(h)
+            });
+            const placement = { "0": "2 / 2", "1": "2 / 3", "3": "3 / 2", "2": "3 / 3" };
+            kmapMatrices.forEach((matrix, index) => {
+                const map = buildMapGrid(matrix, index, { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop });
+                map.style.gridArea = placement[index];
+                mainWrapper.appendChild(map)
+            })
+        }
     }
     
-    function desenharGrupos(groups, gridConfig, outputIndex) {
-        document.querySelectorAll(`.kmap-group`).forEach(el => {
-            if (el.closest(`#kmap-container-${outputIndex}`)) {
-                el.remove();
-            }
+    function desenharGrupos(groups, gridConfig, outputIndex, targetType = 'output') {
+        // Limpa apenas os agrupamentos do mapa alvo (input ou output)
+        const gridPrefix = `${targetType}-kmap-grid-${outputIndex}-`;
+        document.querySelectorAll(`[id^="${gridPrefix}"]`).forEach(grid => {
+            grid.querySelectorAll('.kmap-group').forEach(el => el.remove());
         });
 
         const { rows, cols } = gridConfig;
         const BORDER_WIDTH = 3;
 
         const drawRect = (rect, color, groupIndex) => {
-            const kmapGrid = document.getElementById(`kmap-grid-${outputIndex}-${rect.grid}`);
+            const kmapGrid = document.getElementById(`${targetType}-kmap-grid-${outputIndex}-${rect.grid}`);
             if (!kmapGrid) return;
 
             const numVariaveis = parseInt(numVariaveisInput.value);
-            const subGridConfig = numVariaveis <= 4
-                ? gridConfig
-                : { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop };
+            const subGridConfig = numVariaveis <= 4 ?
+                gridConfig :
+                { varsLeft: gridConfig.varsLeft, varsTop: gridConfig.varsTop };
 
             const leftHeaderCols = subGridConfig.varsLeft.length > 0 ? 1 : 0;
             const topHeaderRows = subGridConfig.varsTop.length > 0 ? 1 : 0;
@@ -1165,47 +1599,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function showCopyFeedback(button, isIconButton, originalText = "Copiar") {
+        const originalContent = button.innerHTML;
+        const originalTitle = button.title;
+
         if (isIconButton) {
-            const icon = button.querySelector('i');
-            const originalIcon = 'bi-clipboard';
-            if (icon) {
-                icon.classList.remove(originalIcon);
-                icon.classList.add('bi-check-lg');
-                button.title = "Copiado!";
-                
-                setTimeout(() => {
-                    icon.classList.remove('bi-check-lg');
-                    icon.classList.add(originalIcon);
-                    button.title = originalText;
-                }, 1500);
-            }
+            button.innerHTML = '<i class="bi bi-check-lg"></i>';
+            button.title = "Copiado!";
         } else {
-            const originalButtonText = button.textContent;
             button.textContent = "Copiado!";
-            button.disabled = true;
-            setTimeout(() => {
-                button.textContent = originalButtonText;
-                button.disabled = false;
-            }, 1500);
         }
+        
+        button.disabled = true;
+        
+        setTimeout(() => {
+            if (isIconButton) {
+                button.innerHTML = originalContent;
+                button.title = originalTitle;
+            } else {
+                button.textContent = originalText;
+            }
+            button.disabled = false;
+        }, 1500);
     }
 
     btnIncrement.addEventListener('click', () => {
         numVariaveisInput.value = Math.min(parseInt(numVariaveisInput.value) + 1, 6);
-        gerarTabelaVerdade();
+        updateInputMode(); // Usar updateInputMode em vez de gerarTabelaVerdade
     });
     btnDecrement.addEventListener('click', () => {
         numVariaveisInput.value = Math.max(parseInt(numVariaveisInput.value) - 1, 2);
-        gerarTabelaVerdade();
+        updateInputMode(); // Usar updateInputMode em vez de gerarTabelaVerdade
     });
 
     btnIncrementSaidas.addEventListener('click', () => {
         numSaidasInput.value = Math.min(parseInt(numSaidasInput.value) + 1, 8);
-        gerarTabelaVerdade();
+        updateInputMode(); // Usar updateInputMode em vez de gerarTabelaVerdade
     });
     btnDecrementSaidas.addEventListener('click', () => {
         numSaidasInput.value = Math.max(parseInt(numSaidasInput.value) - 1, 1);
-        gerarTabelaVerdade();
+        updateInputMode(); // Usar updateInputMode em vez de gerarTabelaVerdade
     });
     btnVoltar.addEventListener('click', () => switchView(mainView));
 
@@ -1232,60 +1664,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id.startsWith('btn-copy-main-expression-')) {
             const expression = document.getElementById(`simplified-expression-${outputIndex}`);
             navigator.clipboard.writeText(expression.textContent).then(() => {
-                showCopyFeedback(button, true, "Copiar Expressão");
+                showCopyFeedback(button, true);
             }).catch(err => console.error('Falha ao copiar expressão:', err));
 
         } else if (id.startsWith('btn-copiar-mapa-')) {
-            const mapColumn = document.getElementById(`map-column-${outputIndex}`);
-            const areaParaCapturar = mapColumn.querySelector('.kmap-and-expression');
-            
-            // CORREÇÃO: Define a cor de fundo baseada no tema atual.
-            const isDarkMode = document.body.dataset.theme === 'dark';
-            const bgColor = isDarkMode ? '#0f172a' : '#ffffff';
-
-            html2canvas(areaParaCapturar, { backgroundColor: bgColor, useCORS: true, scale: 2 }).then(canvas => {
-                canvas.toBlob(blob => {
-                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-                        .then(() => showCopyFeedback(button, false))
-                        .catch(err => console.error('Falha ao copiar imagem do mapa:', err));
-                }, 'image/png');
-            }).catch(err => console.error('Falha ao gerar canvas do mapa:', err));
-
-        } else if (id.startsWith('btn-copy-steps-')) {
-            const stepsContent = document.getElementById(`simplification-steps-container-${outputIndex}`);
-            const styles = `
-                <style>
-                    body { font-family: sans-serif; color: #1e293b; }
-                    .step { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0; }
-                    .step:last-child { border-bottom: none; }
-                    .step-title { font-weight: 500; font-size: 1.2rem; color: #1e293b; margin-bottom: 0.5rem; }
-                    .step-explanation { font-size: 1rem; color: #475569; margin-bottom: 1rem; line-height: 1.6; }
-                    .step-expression-container { display: flex; align-items: center; background-color: #f1f5f9; padding: 0.75rem 1rem; border-radius: 0.5rem; }
-                    .step-expression { font-family: monospace; font-size: 1.1rem; color: rgb(0, 60, 189); flex-grow: 1; }
-                    .copy-icon-button { display: none; }
-                    h2, p { margin: 0; }
-                </style>
-            `;
-            const htmlToCopy = `<!DOCTYPE html><html><head>${styles}</head><body><h2>Passos da Simplificação</h2>${stepsContent.innerHTML}</body></html>`;
-            
-            try {
-                const blob = new Blob([htmlToCopy], { type: 'text/html' });
-                const data = [new ClipboardItem({ 'text/html': blob })];
-                navigator.clipboard.write(data)
-                    .then(() => showCopyFeedback(button, false))
-                    .catch(err => console.error('Falha ao copiar passos:', err));
-            } catch (e) {
-                console.error('Erro ao criar Blob para copiar passos:', e);
-            }
-
-        } else if (button.classList.contains('copy-step-btn')) {
-            const expression = button.dataset.expression;
-            navigator.clipboard.writeText(expression).then(() => {
-                showCopyFeedback(button, true, "Copiar Expressão do Passo");
-            }).catch(err => console.error('Falha ao copiar passo:', err));
+            copiarMapaDeSaidaComoImagem(outputIndex, button);
+        } else if (id.startsWith('btn-copiar-tabela-')) {
+            copiarTabelaDeSaidaComoImagem(outputIndex, button);
         }
     });
-
 
     btnCopiarTabela.addEventListener('click', () => {
         const table = tabelaContainer.querySelector('table');
@@ -1367,6 +1754,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const example = predefinedTables[exampleId];
         if (!example) return;
 
+        // NOVO: Força o modo de entrada para Tabela Verdade
+        isKarnaughInputMode = false;
+        inputModeCheckbox.checked = false;
+
         numVariaveisInput.value = example.numVars;
         numSaidasInput.value = example.numOutputs;
 
@@ -1401,6 +1792,13 @@ document.addEventListener('DOMContentLoaded', () => {
     hamburgerBtn.addEventListener('click', openNav);
     closeBtn.addEventListener('click', closeNav);
 
+    // NOVO: Fecha a sidebar ao clicar fora dela
+    window.addEventListener('click', (event) => {
+        if (sidenav.style.width === "300px" && !sidenav.contains(event.target) && event.target !== hamburgerBtn) {
+            closeNav();
+        }
+    });
+
     sidenav.addEventListener('click', (event) => {
         const target = event.target.closest('a');
         if (target && target.dataset.example) {
@@ -1422,6 +1820,332 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('theme', newTheme);
         applyTheme(newTheme);
     });
+
+    inputModeCheckbox.addEventListener('change', () => {
+        isKarnaughInputMode = inputModeCheckbox.checked;
+        updateInputMode();
+    });
+
+    function updateInputMode() {
+        const btnCopiarTabelaPrincipal = document.getElementById('btn-copiar-tabela');
+        if (isKarnaughInputMode) {
+            // Modo Mapa de Karnaugh - gerar mapas editáveis
+            gerarMapasKarnaughEditaveis();
+            if (btnCopiarTabelaPrincipal) btnCopiarTabelaPrincipal.style.display = 'none'; // Oculta o botão
+        } else {
+            // Modo Tabela Verdade - gerar tabela tradicional
+            gerarTabelaVerdade();
+            if (btnCopiarTabelaPrincipal) btnCopiarTabelaPrincipal.style.display = 'inline-block'; // Mostra o botão
+        }
+    }
+
+    // NOVO: Função para gerar os cabeçalhos de edição de variáveis no modo mapa
+    function gerarCabecalhoEdicaoMapa() {
+        const numVars = parseInt(numVariaveisInput.value);
+        const numSaidas = parseInt(numSaidasInput.value);
+        const headerContainer = document.getElementById('karnaugh-input-header');
+        if (!headerContainer) return;
+
+        // Limpa o container antes de adicionar novos elementos
+        headerContainer.innerHTML = '';
+
+        // Cria o grupo de variáveis de entrada
+        const varCells = varNames.slice(0, numVars).map((v, i) => `
+            <div class="variable-cell">
+                <span class="variable-name" data-index="${i}">${formatNameToSubscript(v)}</span>
+                <i class="bi bi-pencil-square edit-icon" data-index="${i}" title="Editar nome da variável"></i>
+            </div>
+        `).join('');
+
+        const inputGroupContainer = document.createElement('div');
+        inputGroupContainer.className = 'variable-group-container';
+        inputGroupContainer.innerHTML = `
+            <span class="variable-group-label">Entradas:</span>
+            <div class="variable-group">${varCells}</div>
+        `;
+        headerContainer.appendChild(inputGroupContainer);
+
+        // Cria o grupo de variáveis de saída
+        const outputCells = outputVarNames.slice(0, numSaidas).map((outputName, i) => `
+            <div class="variable-cell">
+                <span class="variable-name" data-index="output-${i}">${formatNameToSubscript(outputName)}</span>
+                <i class="bi bi-pencil-square edit-icon" data-index="output-${i}" title="Editar nome da variável de saída"></i>
+            </div>
+        `).join('');
+
+        const outputGroupContainer = document.createElement('div');
+        outputGroupContainer.className = 'variable-group-container';
+        outputGroupContainer.innerHTML = `
+            <span class="variable-group-label">Saídas:</span>
+            <div class="variable-group">${outputCells}</div>
+        `;
+        headerContainer.appendChild(outputGroupContainer);
+
+
+        headerContainer.addEventListener('click', (event) => {
+            if (event.target.classList.contains('edit-icon')) {
+                const cell = event.target.closest('.variable-cell');
+                if (!cell) return;
+
+                const span = cell.querySelector('.variable-name');
+                const indexAttr = event.target.dataset.index;
+
+                if (indexAttr.startsWith('output-')) {
+                    const outputIndex = parseInt(indexAttr.split('-')[1]);
+                    const oldName = outputVarNames[outputIndex];
+                    const newName = prompt(`Editar nome da variável de saída "${oldName}":`, oldName);
+                    if (newName && newName.trim() && newName.trim() !== oldName) {
+                        const plainName = newName.trim().substring(0, 10);
+                        outputVarNames[outputIndex] = plainName;
+                        // Atualiza o cabeçalho e o título do mapa correspondente
+                        gerarMapasKarnaughEditaveis();
+                    }
+                } else {
+                    const numericIndex = parseInt(indexAttr);
+                    const oldName = varNames[numericIndex];
+                    const newName = prompt(`Editar nome da variável "${oldName}":`, oldName);
+                    if (newName && newName.trim() && newName.trim() !== oldName) {
+                        const plainName = newName.trim().substring(0, 10);
+                        varNames[numericIndex] = plainName;
+                        // Redesenha tudo para refletir a mudança
+                        gerarMapasKarnaughEditaveis();
+                    }
+                }
+            }
+        });
+    }
+
+    function copiarMapaDeEntradaComoImagem(outputIndex) {
+        const mapContainer = document.getElementById(`input-kmap-${outputIndex}`);
+        // MODIFICADO: Alvo agora é o primeiro elemento filho, que contém o mapa real.
+        const elementToCapture = mapContainer.firstChild;
+
+        if (!elementToCapture) {
+            console.error('Não foi possível encontrar o elemento do mapa para copiar.');
+            return;
+        }
+
+        const isDarkMode = document.body.dataset.theme === 'dark';
+        const bgColor = isDarkMode ? '#1e293b' : '#ffffff';
+
+        html2canvas(elementToCapture, {
+            backgroundColor: bgColor, 
+            useCORS: true, 
+            scale: 2
+        }).then(canvas => {
+            canvas.toBlob(blob => {
+                navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                    .then(() => showCopyFeedback(button, false, "Copiar Mapa"));
+            }, 'image/png');
+        }).catch(err => console.error('Falha ao gerar canvas do mapa de entrada:', err));
+    }
+
+    function copiarTabelaDeSaidaComoImagem(outputIndex, button) {
+        const tableContainer = document.getElementById(`truth-table-container-${outputIndex}`);
+        const table = tableContainer.querySelector('table');
+        if (!table) return;
+
+        const tableClone = table.cloneNode(true);
+        tableClone.querySelectorAll('.row-hidden').forEach(row => row.remove());
+        tableClone.querySelectorAll('.row-actions').forEach(el => el.remove());
+
+        tableClone.style.position = 'absolute';
+        tableClone.style.top = '-9999px';
+        tableClone.style.left = '-9999px';
+        document.body.appendChild(tableClone);
+
+        // MODIFICADO: Força o fundo branco para consistência com a cópia da tabela de entrada.
+        const bgColor = '#ffffff';
+
+        html2canvas(tableClone, { backgroundColor: bgColor, useCORS: true, scale: 2 }).then(canvas => {
+            canvas.toBlob(blob => {
+                navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                    .then(() => showCopyFeedback(button, false, "Copiar Tabela"));
+            }, 'image/png');
+        }).catch(err => {
+            console.error('Falha ao gerar canvas da tabela de saída:', err);
+        }).finally(() => {
+            document.body.removeChild(tableClone);
+        });
+    }
+
+    function copiarMapaDeSaidaComoImagem(outputIndex, button) {
+        const mapContainer = document.getElementById(`kmap-container-${outputIndex}`);
+        const isDarkMode = document.body.dataset.theme === 'dark';
+        const bgColor = isDarkMode ? '#1e293b' : '#ffffff';
+
+        html2canvas(mapContainer, { backgroundColor: bgColor, useCORS: true, scale: 2 }).then(canvas => {
+            canvas.toBlob(blob => {
+                navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                    .then(() => showCopyFeedback(button, false, "Copiar Mapa"));
+            }, 'image/png');
+        }).catch(err => console.error('Falha ao gerar canvas do mapa de saída:', err));
+    }
+
+    function gerarMapasKarnaughEditaveis() {
+        const numVars = parseInt(numVariaveisInput.value);
+        const numSaidas = parseInt(numSaidasInput.value);
+        // Atualizar nomes das saídas se necessário (o seu código para isto permanece aqui)
+        const numSaidasAtual = outputVarNames.length;
+        if (numSaidas > numSaidasAtual) {
+            if (numSaidasAtual === 1 && numSaidas > 1) {
+                const baseName = outputVarNames[0].replace(/\d+$/, '');
+                outputVarNames[0] = `${baseName}0`;
+            }
+            const baseName = outputVarNames.length > 0 ? outputVarNames[0].replace(/\d+$/, '') : 'S';
+            for (let i = numSaidasAtual; i < numSaidas; i++) {
+                outputVarNames.push(`${baseName}${i}`);
+            }
+        } else if (numSaidas < numSaidasAtual) {
+            outputVarNames.length = numSaidas;
+            if (outputVarNames.length === 1) {
+                outputVarNames[0] = outputVarNames[0].replace(/\d+$/, '');
+            }
+        }
+
+        tabelaContainer.innerHTML = "";
+
+        // 1. PRIMEIRO, CRIAMOS E INSERIMOS TODA A ESTRUTURA HTML
+        const mapsContainer = document.createElement("div");
+        mapsContainer.className = "karnaugh-input-maps";
+        mapsContainer.innerHTML = `
+            <div id="karnaugh-input-header" class="karnaugh-input-header"></div>
+        `;
+
+        for (let outputIndex = 0; outputIndex < numSaidas; outputIndex++) {
+            const mapSection = document.createElement("div");
+            mapSection.className = "input-map-section";
+            // Criamos os contentores para os mapas, mas ainda não os preenchemos
+            // MODIFICADO: Aplica a formatação de subscrito ao título do mapa.
+            mapSection.innerHTML = `
+                <h4>Mapa para ${formatNameToSubscript(outputVarNames[outputIndex])}</h4>
+                <div id="input-kmap-${outputIndex}" class="input-kmap-container"></div>
+                <div class="action-buttons">
+                    <button id="btn-copiar-input-mapa-${outputIndex}" class="btn-secondary">Copiar Mapa</button>
+                </div>
+            `;
+            mapsContainer.appendChild(mapSection);
+        }
+
+        // Adicionamos a estrutura completa à página
+        tabelaContainer.appendChild(mapsContainer);
+
+        // 2. DEPOIS, COM O HTML JÁ NA PÁGINA, PREENCHEMOS CADA MAPA
+        for (let outputIndex = 0; outputIndex < numSaidas; outputIndex++) {
+            // Agora, getElementById encontrará o container porque ele já existe no DOM
+            gerarMapaEditavel(numVars, outputIndex);
+        }
+
+
+        // Adicionar event listeners para os botões de cópia dos mapas de entrada
+        for (let outputIndex = 0; outputIndex < numSaidas; outputIndex++) {
+            const btnCopiarInputMapa = document.getElementById(`btn-copiar-input-mapa-${outputIndex}`);
+            if (btnCopiarInputMapa) {
+                btnCopiarInputMapa.addEventListener('click', () => {
+                    copiarMapaDeEntradaComoImagem(outputIndex, btnCopiarInputMapa);
+                });
+            }
+        }
+        // NOVO: Gera os cabeçalhos de edição
+        gerarCabecalhoEdicaoMapa();
+    }
+
+    function gerarMapaEditavel(numVars, outputIndex) {
+        const container = document.getElementById(`input-kmap-${outputIndex}`);
+        if (!container) return; // Proteção adicional
+
+        const numLinhas = Math.pow(2, numVars);
+
+        if (!window.inputKmapValues) window.inputKmapValues = {};
+        if (!window.inputKmapValues[outputIndex] || window.inputKmapValues[outputIndex].length !== numLinhas) {
+            window.inputKmapValues[outputIndex] = new Array(numLinhas).fill('0');
+        }
+
+        const { kmapMatrices, gridConfig } = gerarMatrizesKmap(numVars, window.inputKmapValues[outputIndex]);
+
+        // Desenha o mapa usando a função reutilizada, agora no modo editável
+        desenharMapaK(numVars, kmapMatrices, gridConfig, outputIndex, true, 'input');
+
+        // Chama a atualização dos grupos logo após criar o mapa
+        atualizarAgrupamentosAutomaticos(outputIndex, numVars);
+    }
+    
+    function toggleCellValue(cellDiv, row, col, grid, numVars, outputIndex) {
+        const currentValue = cellDiv.textContent;
+        let newValue;
+
+        // Ciclar entre 0, 1, X
+        if (currentValue === '0') {
+            newValue = '1';
+        } else if (currentValue === '1') {
+            newValue = 'X';
+        } else {
+            newValue = '0';
+        }
+
+        // Atualizar a célula visual
+        cellDiv.textContent = newValue;
+        cellDiv.classList.remove('x-value', 'one-value');
+        if (newValue === 'X') {
+            cellDiv.classList.add('x-value');
+        } else if (newValue === '1') {
+            cellDiv.classList.add('one-value');
+        }
+
+        // Atualizar o array de valores
+        const linearIndex = kmapPosToTTIndex({ grid, row, col }, numVars);
+        if (window.inputKmapValues && window.inputKmapValues[outputIndex]) {
+            window.inputKmapValues[outputIndex][linearIndex] = newValue;
+        }
+
+        // Atualizar agrupamentos automaticamente
+        atualizarAgrupamentosAutomaticos(outputIndex, numVars);
+    }
+
+    function getLinearIndexFromKmapPosition(row, col, numVars) {
+        // Esta função está incorreta para a lógica atual e não é mais necessária.
+        // A conversão agora é feita diretamente por kmapPosToTTIndex.
+        // Removendo ou deixando-a sem uso para evitar erros.
+        const pos = { grid: 0, row: row, col: col };
+        return kmapPosToTTIndex(pos, numVars);
+    }
+
+    function getGrayCode(n) {
+        if (n === 0) return [''];
+        if (n === 1) return ['0', '1'];
+        
+        const prev = getGrayCode(n - 1);
+        const result = [];
+        
+        // Primeira metade: adicionar '0' no início
+        for (let i = 0; i < prev.length; i++) {
+            result.push('0' + prev[i]);
+        }
+        
+        // Segunda metade: adicionar '1' no início (ordem reversa)
+        for (let i = prev.length - 1; i >= 0; i--) {
+            result.push('1' + prev[i]);
+        }
+        
+        return result;
+    }
+
+    function atualizarAgrupamentosAutomaticos(outputIndex, numVars) {
+        // Obter valores atuais do mapa
+        const kmapValues = window.inputKmapValues[outputIndex];
+        if (!kmapValues) return;
+
+        try {
+            // Gerar matrizes do mapa e simplificar
+            const { kmapMatrices, gridConfig } = gerarMatrizesKmap(numVars, kmapValues);
+            const { finalGroups } = simplificar(numVars, kmapMatrices);
+
+            // Desenhar agrupamentos no mapa de entrada
+            desenharGrupos(finalGroups, gridConfig, outputIndex, 'input');
+        } catch (e) {
+            console.error(`Erro ao atualizar agrupamentos para saída ${outputIndex}:`, e);
+        }
+    }
 
     // --- Inicialização da Aplicação ---
     const savedTheme = localStorage.getItem('theme') || 'light';
