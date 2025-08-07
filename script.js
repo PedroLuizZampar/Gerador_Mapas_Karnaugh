@@ -1653,7 +1653,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = outputSection.querySelector('.output-header h2');
         // Extrai o nome da variável do cabeçalho para encontrar seu índice
         const outputName = header.textContent.replace('Resultados para: ', '').trim();
-        const outputIndex = outputVarNames.findIndex(name => name === outputName);
+        const outputIndex = outputVarNames.findIndex(name => formatNameToSubscript(name) === outputName);
+
 
         if (outputIndex === -1) {
             console.error("Não foi possível encontrar o índice da saída para o botão:", button);
@@ -1671,6 +1672,27 @@ document.addEventListener('DOMContentLoaded', () => {
             copiarMapaDeSaidaComoImagem(outputIndex, button);
         } else if (id.startsWith('btn-copiar-tabela-')) {
             copiarTabelaDeSaidaComoImagem(outputIndex, button);
+        } else if (id.startsWith('btn-copy-steps-')) {
+            const stepsContainer = document.getElementById(`simplification-steps-container-${outputIndex}`);
+            const steps = stepsContainer.querySelectorAll('.step');
+            let fullStepsText = '';
+
+            steps.forEach((step, index) => {
+                const title = step.querySelector('.step-title').textContent;
+                const expression = step.querySelector('.copy-step-btn').dataset.expression;
+                const explanation = step.querySelector('.step-explanation').textContent;
+                
+                fullStepsText += `${title}\n`;
+                fullStepsText += `${expression}\n`;
+                fullStepsText += `Explicação: ${explanation}\n`;
+                if (index < steps.length - 1) {
+                    fullStepsText += '\n---------------------------------\n\n';
+                }
+            });
+
+            navigator.clipboard.writeText(fullStepsText).then(() => {
+                showCopyFeedback(button, false, "Copiar Passos");
+            }).catch(err => console.error('Falha ao copiar passos:', err));
         }
     });
 
